@@ -1,7 +1,5 @@
-# Versi 1.9
-# Update:
-# 1. Menambahkan kolom 'Cabang' (Input Manual) di Admin.
-# 2. Menambahkan Filter Cabang di Dashboard Monitoring.
+# Versi 1.10
+# Update: Mengubah dropdown Edit Data agar default-nya kosong (Admin harus pilih manual baru form muncul).
 
 import streamlit as st
 from supabase import create_client, Client
@@ -228,37 +226,47 @@ elif menu == "📝 Input Data (Admin)":
                 st.subheader("Edit Data")
                 
                 options_dict = {f"{d['order_id']} - {d['customer_name']} ({d['product_name']})": d for d in recent_data.data}
-                selected_label = st.selectbox("Pilih Order yang mau diupdate:", options=list(options_dict.keys()))
-                curr = options_dict[selected_label]
                 
-                st.info(f"Mengedit: **{curr['customer_name']}** | Cabang: {curr.get('branch', '-')}")
+                # --- UPDATE: Default Kosong ---
+                selected_label = st.selectbox(
+                    "Pilih Order yang mau diupdate:", 
+                    options=list(options_dict.keys()),
+                    index=None,  # Default kosong
+                    placeholder="-- Klik disini untuk memilih Order --"
+                )
                 
-                with st.form("form_update"):
-                    list_status = ["Diproses Gudang", "Menunggu Kurir", "Dalam Pengiriman", "Selesai/Diterima"]
-                    try:
-                        idx_status = list_status.index(curr['status'])
-                    except:
-                        idx_status = 0
+                if selected_label:
+                    curr = options_dict[selected_label]
+                    
+                    st.info(f"Mengedit: **{curr['customer_name']}** | Cabang: {curr.get('branch', '-')}")
+                    
+                    with st.form("form_update"):
+                        list_status = ["Diproses Gudang", "Menunggu Kurir", "Dalam Pengiriman", "Selesai/Diterima"]
+                        try:
+                            idx_status = list_status.index(curr['status'])
+                        except:
+                            idx_status = 0
+                            
+                        c_up1, c_up2 = st.columns(2)
+                        new_status = c_up1.selectbox("Update Status", list_status, index=idx_status)
+                        new_branch = c_up2.text_input("Koreksi Cabang (Jika perlu)", value=curr.get('branch') or "")
                         
-                    c_up1, c_up2 = st.columns(2)
-                    new_status = c_up1.selectbox("Update Status", list_status, index=idx_status)
-                    # Bisa update cabang juga kalau salah ketik
-                    new_branch = c_up2.text_input("Koreksi Cabang (Jika perlu)", value=curr.get('branch') or "")
-                    
-                    new_courier = st.text_input("Nama Kurir / Supir", value=curr['courier'] or "")
-                    new_resi = st.text_input("No Resi / Info Lain", value=curr['resi'] or "")
-                    
-                    if st.form_submit_button("Simpan Perubahan"):
-                        upd_data = {
-                            "status": new_status, 
-                            "courier": new_courier, 
-                            "resi": new_resi,
-                            "branch": new_branch
-                        }
-                        supabase.table("shipments").update(upd_data).eq("order_id", curr['order_id']).execute()
-                        st.success("✅ Status berhasil diperbarui!")
-                        time.sleep(1)
-                        st.rerun()
+                        new_courier = st.text_input("Nama Kurir / Supir", value=curr['courier'] or "")
+                        new_resi = st.text_input("No Resi / Info Lain", value=curr['resi'] or "")
+                        
+                        if st.form_submit_button("Simpan Perubahan"):
+                            upd_data = {
+                                "status": new_status, 
+                                "courier": new_courier, 
+                                "resi": new_resi,
+                                "branch": new_branch
+                            }
+                            supabase.table("shipments").update(upd_data).eq("order_id", curr['order_id']).execute()
+                            st.success("✅ Status berhasil diperbarui!")
+                            time.sleep(1)
+                            st.rerun()
+                else:
+                    st.write("👆 Pilih salah satu data di atas untuk memunculkan formulir edit.")
             else:
                 st.info("Belum ada data pengiriman.")
 
