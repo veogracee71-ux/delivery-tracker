@@ -1,9 +1,7 @@
-# Versi 2.4
+# Versi 2.5
 # Update:
-# 1. Menambahkan Login SPV Cabang (Untuk Validasi & Update Status).
-# 2. Fitur Auto-Clear Form (Formulir bersih setelah submit).
-# 3. Notifikasi Pop-up (Toast) saat sukses.
-# 4. Membersihkan emoji pada tombol.
+# 1. Mengubah TEMA TOMBOL menjadi BIRU BLIBLI (#0095DA) menggunakan Custom CSS.
+# 2. Fitur Login SPV, Auto-Clear, & Toast Notifikasi tetap ada.
 
 import streamlit as st
 from supabase import create_client, Client
@@ -11,7 +9,6 @@ from urllib.parse import quote
 import time
 
 # --- KONFIGURASI PASSWORD (SALES, SPV, ADMIN) ---
-# Password Sales: Akses Input Order
 SALES_CREDENTIALS = {
     "Kopo Bandung": "kopo123",
     "Banjaran Bandung": "banjaran123",
@@ -21,7 +18,6 @@ SALES_CREDENTIALS = {
     "Kalimalang Bekasi": "bekasi123"
 }
 
-# Password SPV: Akses Validasi & Update Status
 SPV_CREDENTIALS = {
     "Kopo Bandung": "spvkopo",
     "Banjaran Bandung": "spvbanjaran",
@@ -31,7 +27,7 @@ SPV_CREDENTIALS = {
     "Kalimalang Bekasi": "spvbekasi"
 }
 
-ADMIN_PASSWORD = "admin123" # Akses Full + Hapus Data
+ADMIN_PASSWORD = "admin123" 
 
 # --- KONFIGURASI DARI SECRETS ---
 try:
@@ -72,20 +68,50 @@ def clear_input_form():
 # --- SETUP HALAMAN ---
 st.set_page_config(page_title="Delivery Tracker", page_icon="📦", layout="wide") 
 
+# --- CUSTOM CSS: TOMBOL BIRU BLIBLI ---
+st.markdown("""
+<style>
+    /* Mengubah semua tombol menjadi warna Biru Blibli (#0095DA) */
+    div.stButton > button {
+        background-color: #0095DA !important;
+        color: white !important;
+        border: 1px solid #0095DA !important;
+        font-weight: bold !important;
+    }
+    div.stButton > button:hover {
+        background-color: #007AB8 !important; /* Biru agak gelap saat hover */
+        border-color: #007AB8 !important;
+        color: white !important;
+    }
+    div.stButton > button:active {
+        background-color: #005F8F !important;
+        color: white !important;
+    }
+    div.stButton > button:focus:not(:active) {
+        border-color: #0095DA !important;
+        color: white !important;
+    }
+    /* Pastikan tombol di dalam form juga biru */
+    div.stForm > div.stFormSubmitButton > button {
+        background-color: #0095DA !important;
+        color: white !important;
+        border: none !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # --- SIDEBAR LOGIC ---
 if 'user_role' not in st.session_state:
-    st.session_state['user_role'] = "Guest" # Guest, Sales, SPV, Admin
+    st.session_state['user_role'] = "Guest" 
 if 'user_branch' not in st.session_state:
     st.session_state['user_branch'] = ""
 
 menu_options = ["📊 Dashboard Monitoring", "🔍 Cek Resi (Public)"]
 
-# Logika Tampilan Menu Berdasarkan Role
 if st.session_state['user_role'] == "Sales":
     menu_options.insert(0, "📝 Input Delivery Order")
 
 elif st.session_state['user_role'] == "SPV":
-    # SPV bisa Input (Bantu sales) dan Update Status
     menu_options.insert(0, "📝 Input Delivery Order")
     menu_options.append("⚙️ Update Status (SPV)")
 
@@ -239,7 +265,6 @@ elif menu == "📝 Input Delivery Order":
         st.subheader("Data Pelanggan & Barang")
         
         c1, c2 = st.columns(2)
-        # Menambahkan KEY agar bisa di-clear
         in_id = c1.text_input("Order ID (Wajib)", placeholder="Contoh: 12187...", key="in_id")
         in_sales = c2.text_input("Nama Sales", placeholder="Nama Anda", key="in_sales")
         
@@ -253,7 +278,7 @@ elif menu == "📝 Input Delivery Order":
         in_barang = c5.text_input("Nama Barang", placeholder="Kulkas, TV, dll", key="in_barang")
         in_tipe = c6.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"])
         
-        # Tombol Tanpa Emoji
+        # Tombol akan otomatis berwarna Biru karena CSS di atas
         submitted = st.form_submit_button("Kirim ke Gudang", type="primary")
         
         if submitted:
@@ -272,12 +297,8 @@ elif menu == "📝 Input Delivery Order":
                     }
                     supabase.table("shipments").insert(payload).execute()
                     
-                    # Notifikasi Pop-up
                     st.toast(f"Sukses! Order {in_id} berhasil dikirim.", icon="✅")
-                    
-                    # Bersihkan Form
                     clear_input_form()
-                    
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
@@ -292,6 +313,7 @@ elif menu == "🔍 Cek Resi (Public)":
     st.title("🔍 Cek Status Pengiriman")
     query = st.text_input("Masukkan Order ID / Nama Customer:")
 
+    # Tombol Lacak akan biru
     if st.button("Lacak") or query:
         if query:
             try:
@@ -333,7 +355,6 @@ elif menu == "🔍 Cek Resi (Public)":
 elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SPV)":
     st.title("⚙️ Validasi & Update Order")
     
-    # Filter Data: Admin lihat semua, SPV hanya cabang sendiri
     query_db = supabase.table("shipments").select("*").order("created_at", desc=True).limit(50)
     
     if st.session_state['user_role'] == "SPV":
@@ -361,12 +382,12 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
                 new_kurir = c2.text_input("Kurir / Supir", value=curr['courier'] or "")
                 new_resi = st.text_input("Nomor Resi / Plat Nomor", value=curr['resi'] or "")
                 
-                # Opsi Edit Data Customer (Khusus Admin/SPV jika salah ketik)
                 st.divider()
                 st.caption("Koreksi Data (Jika Diperlukan)")
                 corr_nama = st.text_input("Nama Customer", value=curr['customer_name'])
                 corr_barang = st.text_input("Nama Barang", value=curr['product_name'])
                 
+                # Tombol Simpan akan biru
                 if st.form_submit_button("Simpan Perubahan"):
                     upd = {
                         "status": new_stat, "courier": new_kurir, "resi": new_resi,
@@ -385,7 +406,7 @@ elif menu == "🗑️ Hapus Data (Admin)":
     st.error("Area Berbahaya. Data hilang permanen.")
     
     del_id = st.text_input("Masukkan Order ID yang mau dihapus:")
-    # Tombol Hapus Tanpa Emoji
+    # Tombol Hapus akan biru (default behavior dari CSS kita, bisa di override jika mau merah)
     if st.button("Hapus Permanen", type="primary"):
         if del_id:
             supabase.table("shipments").delete().eq("order_id", del_id).execute()
