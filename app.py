@@ -1,9 +1,10 @@
-# Versi 2.5
+# Versi 2.6
 # Update:
-# 1. Mengubah TEMA TOMBOL menjadi BIRU BLIBLI (#0095DA) menggunakan Custom CSS.
-# 2. Fitur Login SPV, Auto-Clear, & Toast Notifikasi tetap ada.
+# 1. Menambahkan Integrasi Website Tracking PT. BES (Link & Iframe) di menu Update Status.
+# 2. Tombol tetap Biru Blibli.
 
 import streamlit as st
+import streamlit.components.v1 as components # Import untuk menampilkan website
 from supabase import create_client, Client
 from urllib.parse import quote
 import time
@@ -71,7 +72,6 @@ st.set_page_config(page_title="Delivery Tracker", page_icon="📦", layout="wide
 # --- CUSTOM CSS: TOMBOL BIRU BLIBLI ---
 st.markdown("""
 <style>
-    /* Mengubah semua tombol menjadi warna Biru Blibli (#0095DA) */
     div.stButton > button {
         background-color: #0095DA !important;
         color: white !important;
@@ -79,19 +79,10 @@ st.markdown("""
         font-weight: bold !important;
     }
     div.stButton > button:hover {
-        background-color: #007AB8 !important; /* Biru agak gelap saat hover */
+        background-color: #007AB8 !important;
         border-color: #007AB8 !important;
         color: white !important;
     }
-    div.stButton > button:active {
-        background-color: #005F8F !important;
-        color: white !important;
-    }
-    div.stButton > button:focus:not(:active) {
-        border-color: #0095DA !important;
-        color: white !important;
-    }
-    /* Pastikan tombol di dalam form juga biru */
     div.stForm > div.stFormSubmitButton > button {
         background-color: #0095DA !important;
         color: white !important;
@@ -278,7 +269,7 @@ elif menu == "📝 Input Delivery Order":
         in_barang = c5.text_input("Nama Barang", placeholder="Kulkas, TV, dll", key="in_barang")
         in_tipe = c6.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"])
         
-        # Tombol akan otomatis berwarna Biru karena CSS di atas
+        # Tombol otomatis biru
         submitted = st.form_submit_button("Kirim ke Gudang", type="primary")
         
         if submitted:
@@ -296,7 +287,6 @@ elif menu == "📝 Input Delivery Order":
                         "status": "Menunggu Konfirmasi" 
                     }
                     supabase.table("shipments").insert(payload).execute()
-                    
                     st.toast(f"Sukses! Order {in_id} berhasil dikirim.", icon="✅")
                     clear_input_form()
                     time.sleep(1)
@@ -313,7 +303,6 @@ elif menu == "🔍 Cek Resi (Public)":
     st.title("🔍 Cek Status Pengiriman")
     query = st.text_input("Masukkan Order ID / Nama Customer:")
 
-    # Tombol Lacak akan biru
     if st.button("Lacak") or query:
         if query:
             try:
@@ -371,6 +360,15 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
             curr = opts[sel]
             st.info(f"Edit: **{curr['product_name']}** | Sales: {curr.get('sales_name')}")
             
+            # --- INTEGRASI WEBSITE PT BES (NEW) ---
+            with st.expander("🌍 Buka Tracking PT. BES (Cek Resi)"):
+                st.caption("Salin nomor resi yang sudah Anda input, lalu tempel di website di bawah ini.")
+                st.link_button("Buka Website PT. BES di Tab Baru ↗️", "https://www.bes-paket.com/track-package")
+                # Iframe opsional (Mungkin diblokir oleh website target, tapi kita coba tampilkan)
+                st.caption("👇 Tampilan Website Langsung (Jika didukung perangkat):")
+                components.iframe("https://www.bes-paket.com/track-package", height=600, scrolling=True)
+            # --------------------------------------
+
             with st.form("admin_update"):
                 c1, c2 = st.columns(2)
                 stat_list = ["Menunggu Konfirmasi", "Diproses Gudang", "Menunggu Kurir", "Dalam Pengiriman", "Selesai/Diterima"]
@@ -387,7 +385,6 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
                 corr_nama = st.text_input("Nama Customer", value=curr['customer_name'])
                 corr_barang = st.text_input("Nama Barang", value=curr['product_name'])
                 
-                # Tombol Simpan akan biru
                 if st.form_submit_button("Simpan Perubahan"):
                     upd = {
                         "status": new_stat, "courier": new_kurir, "resi": new_resi,
@@ -406,7 +403,6 @@ elif menu == "🗑️ Hapus Data (Admin)":
     st.error("Area Berbahaya. Data hilang permanen.")
     
     del_id = st.text_input("Masukkan Order ID yang mau dihapus:")
-    # Tombol Hapus akan biru (default behavior dari CSS kita, bisa di override jika mau merah)
     if st.button("Hapus Permanen", type="primary"):
         if del_id:
             supabase.table("shipments").delete().eq("order_id", del_id).execute()
