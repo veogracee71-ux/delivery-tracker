@@ -108,7 +108,7 @@ with st.sidebar:
     st.caption("© 2025 **Delivery Tracker System**")
     st.caption("🚀 **Versi 2.19 (Beta)**")
     st.caption("Dibuat untuk mempermudah operasional & monitoring pengiriman.")
-    st.caption("_Internal Use Only | Developed by Agung_")
+    st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
 # HALAMAN 1: LOGIN PAGE (KHUSUS GUEST)
