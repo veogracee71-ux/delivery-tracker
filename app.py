@@ -1,7 +1,7 @@
-# Versi 2.14
+# Versi 2.16
 # Update:
-# 1. KEAMANAN: Memindahkan semua password (Sales, SPV, Admin) ke dalam Streamlit Secrets.
-# 2. Kode sekarang bersih dari password yang tertulis manual.
+# 1. Mengubah Sidebar Default menjadi TERTUTUP (Collapsed) agar layar lega.
+# 2. Menambahkan Footer Disclaimer (Permohonan maaf & Author) di bawah sidebar.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -10,8 +10,13 @@ from urllib.parse import quote
 import time
 from datetime import datetime, date 
 
-# --- KONFIGURASI HALAMAN ---
-st.set_page_config(page_title="Delivery Tracker", page_icon="📦", layout="wide") 
+# --- KONFIGURASI HALAMAN (SIDEBAR COLLAPSED) ---
+st.set_page_config(
+    page_title="Delivery Tracker", 
+    page_icon="📦", 
+    layout="wide", 
+    initial_sidebar_state="collapsed" # Default tertutup agar layar lega
+)
 
 # --- LOAD KONFIGURASI DARI SECRETS ---
 try:
@@ -20,7 +25,6 @@ try:
     key = st.secrets["SUPABASE_KEY"]
     
     # 2. Load Password dari Secrets
-    # Pastikan di secrets.toml sudah ada bagian [passwords], [passwords.sales], dan [passwords.spv]
     ADMIN_PASSWORD = st.secrets["passwords"]["admin"]
     SALES_CREDENTIALS = st.secrets["passwords"]["sales"]
     SPV_CREDENTIALS = st.secrets["passwords"]["spv"]
@@ -96,21 +100,30 @@ elif st.session_state['user_role'] == "Admin":
 
 menu = st.sidebar.radio("Menu Aplikasi", menu_options)
 
-# --- INFO USER & LOGOUT ---
-if st.session_state['user_role'] != "Guest":
-    with st.sidebar:
-        st.divider()
+# --- FOOTER & INFO USER DI SIDEBAR ---
+with st.sidebar:
+    st.divider()
+    
+    # Info User Login
+    if st.session_state['user_role'] != "Guest":
         st.info(f"👤 {st.session_state['user_role']} - {st.session_state['user_branch']}")
         if st.button("Logout / Keluar"):
             st.session_state['user_role'] = "Guest"
             st.session_state['user_branch'] = ""
             st.rerun()
+    
+    # Footer Disclaimer (Permintaan User)
+    st.caption("---")
+    st.caption("ℹ️ **Catatan Pengembang**")
+    st.caption("Mohon maaf jika aplikasi ini masih banyak kekurangan.")
+    st.caption("_Oleh : Author_")
 
 # ==========================================
 # HALAMAN 1: LOGIN PAGE (KHUSUS GUEST)
 # ==========================================
 if menu == "🔐 Login Staff":
     st.title("🔐 Login Sistem Delivery Tracker")
+    st.info("ℹ️ Klik tanda panah (>) di pojok kiri atas untuk membuka menu lainnya.")
     st.markdown("Silakan login sesuai peran Anda untuk mengakses Dashboard Operasional.")
     
     col_login1, col_login2, col_login3 = st.columns([1, 2, 1])
@@ -121,7 +134,6 @@ if menu == "🔐 Login Staff":
             st.divider()
             
             if login_type == "Sales Cabang":
-                # Mengambil daftar cabang dari keys di Secrets
                 cabang_list = list(SALES_CREDENTIALS.keys())
                 selected_cabang = st.selectbox("Pilih Cabang Anda:", cabang_list)
                 pw = st.text_input("Password Sales:", type="password")
