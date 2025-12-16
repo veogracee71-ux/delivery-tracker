@@ -1,5 +1,5 @@
-# Versi 2.19
-# Update: Mengubah tahun copyright di footer menjadi 2025.
+# Versi 2.20
+# Update: Memperbaiki CSS agar SEMUA jenis tombol (termasuk Link Button ke PT. BES) berwarna Biru Blibli.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -53,9 +53,10 @@ def clear_input_form():
     if "in_tipe" in st.session_state:
         st.session_state["in_tipe"] = "Reguler"
 
-# --- CUSTOM CSS ---
+# --- CUSTOM CSS (UPDATE COMPLETE BLUE THEME) ---
 st.markdown("""
 <style>
+    /* 1. Tombol Standar (st.button) */
     div.stButton > button {
         background-color: #0095DA !important;
         color: white !important;
@@ -67,10 +68,28 @@ st.markdown("""
         border-color: #007AB8 !important;
         color: white !important;
     }
+    
+    /* 2. Tombol Submit Form (st.form_submit_button) */
     div.stForm > div.stFormSubmitButton > button {
         background-color: #0095DA !important;
         color: white !important;
         border: none !important;
+    }
+    div.stForm > div.stFormSubmitButton > button:hover {
+        background-color: #007AB8 !important;
+    }
+
+    /* 3. Tombol Link (st.link_button - FIX UPDATE 2.20) */
+    [data-testid="stLinkButton"] > a {
+        background-color: #0095DA !important;
+        color: white !important;
+        border: 1px solid #0095DA !important;
+        font-weight: bold !important;
+    }
+    [data-testid="stLinkButton"] > a:hover {
+        background-color: #007AB8 !important;
+        border-color: #007AB8 !important;
+        color: white !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -103,19 +122,19 @@ with st.sidebar:
             st.session_state['user_branch'] = ""
             st.rerun()
     
-    # --- FOOTER PROFESIONAL (UPDATED YEAR) ---
+    # --- FOOTER PROFESIONAL ---
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.19 (Beta)**")
+    st.caption("🚀 **Versi 2.20 (Beta)**")
     st.caption("Dibuat untuk mempermudah operasional & monitoring pengiriman.")
-    st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
+    st.caption("_Internal Use Only | Developed by Agung_")
 
 # ==========================================
 # HALAMAN 1: LOGIN PAGE (KHUSUS GUEST)
 # ==========================================
 if menu == "🔐 Login Staff":
     st.title("🔐 Login Sistem Delivery Tracker")
-    st.info("ℹ️ Klik tanda panah (>>) di pojok kiri atas untuk membuka menu lainnya.")
+    st.info("ℹ️ Klik tanda panah (>) di pojok kiri atas untuk membuka menu lainnya.")
     st.markdown("Silakan login sesuai peran Anda untuk mengakses Dashboard Operasional.")
     
     col_login1, col_login2, col_login3 = st.columns([1, 2, 1])
