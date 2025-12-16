@@ -1,5 +1,8 @@
-# Versi 2.1
-# Update: Mengganti daftar cabang sesuai lokasi real (Kopo, Banjaran, Moh Toha, Ujung Berung, Margacinta, Kalimalang).
+# Versi 2.2
+# Update: Memisahkan Dashboard Monitoring menjadi 3 bagian tegas:
+# 1. Diproses Gudang (Pending)
+# 2. Sedang Jalan (Shipping)
+# 3. Selesai (Completed)
 
 import streamlit as st
 from supabase import create_client, Client
@@ -7,7 +10,6 @@ from urllib.parse import quote
 import time
 
 # --- KONFIGURASI CABANG & PASSWORD ---
-# Format: "Nama Cabang": "Password"
 BRANCH_CREDENTIALS = {
     "Kopo Bandung": "kopo123",
     "Banjaran Bandung": "banjaran123",
@@ -15,7 +17,7 @@ BRANCH_CREDENTIALS = {
     "Ujung Berung Bandung": "uber123",
     "Margacinta Bandung": "marga123",
     "Kalimalang Bekasi": "bekasi123",
-    "Pusat": "admin123" # Password Admin (Back Office)
+    "Pusat": "admin123" # Password Admin
 }
 
 # --- KONFIGURASI DARI SECRETS ---
@@ -48,35 +50,30 @@ def get_status_color(status):
 # --- SETUP HALAMAN ---
 st.set_page_config(page_title="Delivery Tracker", page_icon="📦", layout="wide") 
 
-# --- SIDEBAR LOGIC (LOGIN SISTEM) ---
+# --- SIDEBAR LOGIC ---
 if 'user_role' not in st.session_state:
-    st.session_state['user_role'] = "Guest" # Guest, Sales, Admin
+    st.session_state['user_role'] = "Guest"
 if 'user_branch' not in st.session_state:
     st.session_state['user_branch'] = ""
 
-# Menu Dasar (Selalu Ada)
 menu_options = ["📊 Dashboard Monitoring", "🔍 Cek Resi (Public)"]
 
-# Tambah Menu Berdasarkan Login
 if st.session_state['user_role'] == "Sales":
-    menu_options.insert(0, "📝 Input Delivery Order") # Menu Utama Sales
+    menu_options.insert(0, "📝 Input Delivery Order")
 elif st.session_state['user_role'] == "Admin":
     menu_options.append("⚙️ Update Status (Admin)")
     menu_options.append("🗑️ Hapus Data (Admin)")
 
 menu = st.sidebar.radio("Menu Aplikasi", menu_options)
 
-# --- LOGIN AREA DI SIDEBAR ---
+# --- LOGIN AREA ---
 with st.sidebar:
     st.divider()
-    
-    # Jika belum login, tampilkan form login
     if st.session_state['user_role'] == "Guest":
         with st.expander("🔐 Login Staff / Sales"):
             login_type = st.selectbox("Login Sebagai:", ["Sales Cabang", "Admin Pusat"])
             
             if login_type == "Sales Cabang":
-                # Pilih Cabang (Filter selain Pusat)
                 cabang_list = [k for k in BRANCH_CREDENTIALS.keys() if k != "Pusat"]
                 selected_cabang = st.selectbox("Pilih Cabang:", cabang_list)
                 pw = st.text_input("Password Cabang:", type="password")
@@ -90,8 +87,7 @@ with st.sidebar:
                         st.rerun()
                     else:
                         st.error("Password Salah!")
-            
-            else: # Login Admin
+            else:
                 pw_admin = st.text_input("Password Admin:", type="password")
                 if st.button("Masuk Admin"):
                     if pw_admin == BRANCH_CREDENTIALS["Pusat"]:
@@ -102,8 +98,6 @@ with st.sidebar:
                         st.rerun()
                     else:
                         st.error("Password Salah!")
-
-    # Jika sudah login, tampilkan info & logout
     else:
         st.info(f"Halo, {st.session_state['user_role']} ({st.session_state['user_branch']})")
         if st.button("Logout"):
@@ -112,14 +106,12 @@ with st.sidebar:
             st.rerun()
 
 # ==========================================
-# HALAMAN 1: DASHBOARD (Semua Bisa Lihat)
+# HALAMAN 1: DASHBOARD (Monitoring Global)
 # ==========================================
 if menu == "📊 Dashboard Monitoring":
     st.title("📊 Monitoring Operasional")
     
-    # Jika Admin, lihat semua. Jika Sales, default lihat cabangnya sendiri.
     default_index = 0
-    
     try:
         response = supabase.table("shipments").select("*").execute()
         all_data = response.data
@@ -128,7 +120,6 @@ if menu == "📊 Dashboard Monitoring":
             unique_branches = sorted(list(set([d['branch'] for d in all_data if d.get('branch')])))
             unique_branches.insert(0, "Semua Cabang")
             
-            # Auto-select cabang sales jika login
             if st.session_state['user_role'] == "Sales" and st.session_state['user_branch'] in unique_branches:
                 default_index = unique_branches.index(st.session_state['user_branch'])
 
@@ -139,38 +130,35 @@ if menu == "📊 Dashboard Monitoring":
             else:
                 filtered_data = all_data
 
-            # Hitung Statistik
-            total_gudang = 0
-            total_jalan = 0
-            total_selesai = 0
-            active_orders = []
-            completed_orders = []
+            # --- LOGIKA PEMISAHAN DATA BARU ---
+            processed_orders = []  # Gudang (Proses)
+            shipping_orders = []   # Jalan (Dikirim)
+            completed_orders = []  # Selesai
 
             for item in filtered_data:
                 s = item['status'].lower()
                 if "selesai" in s or "diterima" in s:
-                    total_selesai += 1
                     completed_orders.append(item)
                 elif "dikirim" in s or "jalan" in s or "pengiriman" in s:
-                    total_jalan += 1
-                    active_orders.append(item)
+                    shipping_orders.append(item)
                 else:
-                    total_gudang += 1
-                    active_orders.append(item)
+                    # Sisanya masuk ke Proses Gudang (Menunggu Konfirmasi, Packing, dll)
+                    processed_orders.append(item)
 
+            # Statistik (Angka Besar)
             c1, c2, c3 = st.columns(3)
-            c1.metric("📦 Menunggu/Proses", f"{total_gudang}")
-            c2.metric("🚚 Sedang Jalan", f"{total_jalan}")
-            c3.metric("✅ Selesai", f"{total_selesai}")
+            c1.metric("📦 Diproses Gudang", f"{len(processed_orders)}")
+            c2.metric("🚚 Sedang Jalan", f"{len(shipping_orders)}")
+            c3.metric("✅ Selesai", f"{len(completed_orders)}")
             
             st.divider()
             
-            # Tabel Aktif
-            with st.expander(f"📂 Order Aktif (Proses & Jalan) - {len(active_orders)}", expanded=True):
-                if active_orders:
-                    clean_data = []
-                    for x in active_orders:
-                        clean_data.append({
+            # 1. TABEL DIPROSES GUDANG
+            with st.expander(f"📦 Sedang Diproses Gudang - {len(processed_orders)}", expanded=True):
+                if processed_orders:
+                    data_wh = []
+                    for x in processed_orders:
+                        data_wh.append({
                             "ID": x['order_id'],
                             "Sales": x.get('sales_name', '-'),
                             "Customer": x['customer_name'],
@@ -178,25 +166,44 @@ if menu == "📊 Dashboard Monitoring":
                             "Status": x['status'],
                             "Tgl": x['created_at'][:10]
                         })
-                    st.dataframe(clean_data, use_container_width=True)
+                    st.dataframe(data_wh, use_container_width=True)
                 else:
-                    st.success("Tidak ada order pending.")
+                    st.success("Tidak ada barang antre di gudang.")
 
-            # Tabel History
+            # 2. TABEL SEDANG JALAN
+            with st.expander(f"🚚 Sedang Dalam Pengiriman - {len(shipping_orders)}", expanded=True):
+                if shipping_orders:
+                    data_ship = []
+                    for x in shipping_orders:
+                        data_ship.append({
+                            "ID": x['order_id'],
+                            "Sales": x.get('sales_name', '-'),
+                            "Customer": x['customer_name'],
+                            "Barang": x['product_name'],
+                            "Status": x['status'],
+                            "Kurir": x['courier'] or '-',
+                            "Tgl": x['created_at'][:10]
+                        })
+                    st.dataframe(data_ship, use_container_width=True)
+                else:
+                    st.info("Tidak ada barang yang sedang di jalan.")
+
+            # 3. TABEL SELESAI
             with st.expander(f"✅ Riwayat Selesai - {len(completed_orders)}", expanded=False):
                 if completed_orders:
-                    clean_history = []
+                    data_done = []
                     for x in completed_orders:
-                        clean_history.append({
+                        data_done.append({
                             "ID": x['order_id'],
                             "Sales": x.get('sales_name', '-'),
                             "Customer": x['customer_name'],
                             "Barang": x['product_name'],
                             "Tgl": x['created_at'][:10]
                         })
-                    st.dataframe(clean_history, use_container_width=True)
+                    st.dataframe(data_done, use_container_width=True)
                 else:
                     st.info("Belum ada history selesai.")
+
         else:
             st.info("Data kosong.")
     except Exception as e:
@@ -208,32 +215,26 @@ if menu == "📊 Dashboard Monitoring":
 elif menu == "📝 Input Delivery Order":
     st.title("📝 Input Delivery Order")
     
-    # Ambil Cabang dari Login
     cabang_aktif = st.session_state['user_branch']
     st.info(f"Login sebagai: **{cabang_aktif}**")
     
     with st.form("sales_input_form"):
         st.subheader("Data Pelanggan & Barang")
         
-        # Baris 1
         c1, c2 = st.columns(2)
         in_id = c1.text_input("Order ID (Wajib)", placeholder="Contoh: 12187...")
         in_sales = c2.text_input("Nama Sales", placeholder="Nama Anda")
         
-        # Baris 2
         c3, c4 = st.columns(2)
         in_nama = c3.text_input("Nama Customer", placeholder="Nama Pelanggan")
         in_hp = c4.text_input("No HP Customer", placeholder="0812...")
         
-        # Baris 3
         in_alamat = st.text_area("Alamat Pengiriman", placeholder="Alamat lengkap...")
         
-        # Baris 4
         c5, c6 = st.columns(2)
         in_barang = c5.text_input("Nama Barang", placeholder="Kulkas, TV, dll")
         in_tipe = c6.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"])
         
-        # Tombol Submit
         submitted = st.form_submit_button("Kirim ke Gudang 🚀", type="primary")
         
         if submitted:
@@ -247,8 +248,8 @@ elif menu == "📝 Input Delivery Order":
                         "product_name": in_barang,
                         "delivery_type": in_tipe,
                         "sales_name": in_sales,
-                        "branch": cabang_aktif, # Otomatis dari login
-                        "status": "Menunggu Konfirmasi" # Status Awal
+                        "branch": cabang_aktif, 
+                        "status": "Menunggu Konfirmasi" 
                     }
                     supabase.table("shipments").insert(payload).execute()
                     st.success(f"Order {in_id} Berhasil Dikirim ke Gudang!")
@@ -276,7 +277,6 @@ elif menu == "🔍 Cek Resi (Public)":
                 
                 if res.data:
                     for d in res.data:
-                        # Tampilan
                         color = get_status_color(d['status'])
                         if color == "success": st.success(f"Status: {d['status'].upper()}", icon="✅")
                         elif color == "info": st.info(f"Status: {d['status'].upper()}", icon="🚚")
@@ -291,7 +291,6 @@ elif menu == "🔍 Cek Resi (Public)":
                         * 🚚 **Info Kurir:** {d['courier'] or '-'} | Resi: {d['resi'] or '-'}
                         """)
                         
-                        # Template Pesan
                         st.caption("Salin pesan update:")
                         msg = f"Halo Kak {d['customer_name']}, pesanan {d['product_name']} statusnya: *{d['status']}*.\nKurir: {d['courier'] or '-'}.\nTerima kasih!"
                         st.code(msg, language=None)
@@ -307,11 +306,9 @@ elif menu == "🔍 Cek Resi (Public)":
 elif menu == "⚙️ Update Status (Admin)":
     st.title("⚙️ Validasi & Update Order")
     
-    # Ambil data terbaru
     recent = supabase.table("shipments").select("*").order("created_at", desc=True).limit(50).execute()
     
     if recent.data:
-        # Dropdown pilihan
         opts = {f"[{d['status']}] {d['order_id']} - {d['customer_name']}": d for d in recent.data}
         sel = st.selectbox("Pilih Order:", list(opts.keys()), index=None, placeholder="Pilih order untuk diproses...")
         
@@ -320,7 +317,6 @@ elif menu == "⚙️ Update Status (Admin)":
             st.info(f"Edit Order: **{curr['product_name']}** | Cabang: {curr.get('branch')} | Sales: {curr.get('sales_name')}")
             
             with st.form("admin_update"):
-                # Admin fokus update status & resi saja
                 c1, c2 = st.columns(2)
                 stat_list = ["Menunggu Konfirmasi", "Diproses Gudang", "Menunggu Kurir", "Dalam Pengiriman", "Selesai/Diterima"]
                 
