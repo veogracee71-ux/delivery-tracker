@@ -1,13 +1,12 @@
-# Versi 2.9
-# Update:
-# 1. Menerapkan Isolasi Data di Dashboard. Sales & SPV hanya bisa melihat data cabangnya sendiri (Filter dikunci/dihilangkan).
-# 2. Admin tetap bisa melihat semua cabang.
+# Versi 2.11
+# Update: Mengubah pesan error "Duplicate Key" menjadi bahasa manusia yang mudah dimengerti Sales.
 
 import streamlit as st
 import streamlit.components.v1 as components 
 from supabase import create_client, Client
 from urllib.parse import quote
 import time
+from datetime import datetime, date # Import untuk waktu
 
 # --- KONFIGURASI PASSWORD (SALES, SPV, ADMIN) ---
 SALES_CREDENTIALS = {
@@ -166,7 +165,7 @@ with st.sidebar:
             st.rerun()
 
 # ==========================================
-# HALAMAN 1: DASHBOARD (DENGAN ISOLASI DATA)
+# HALAMAN 1: DASHBOARD
 # ==========================================
 if menu == "📊 Dashboard Monitoring":
     st.title("📊 Monitoring Operasional")
@@ -176,19 +175,14 @@ if menu == "📊 Dashboard Monitoring":
         all_data = response.data
 
         if all_data:
-            # --- LOGIKA ISOLASI DATA (KEAMANAN) ---
             if st.session_state['user_role'] in ["Sales", "SPV"]:
-                # Jika Sales/SPV, paksa filter ke cabang sendiri
                 selected_branch = st.session_state['user_branch']
-                # Tampilkan info saja, bukan dropdown
                 st.info(f"📍 Menampilkan Data Cabang: **{selected_branch}**")
             else:
-                # Jika Admin/Guest, boleh pilih semua
                 unique_branches = sorted(list(set([d['branch'] for d in all_data if d.get('branch')])))
                 unique_branches.insert(0, "Semua Cabang")
                 selected_branch = st.selectbox("📍 Filter Cabang (Admin Mode):", unique_branches)
             
-            # Terapkan Filter
             if selected_branch != "Semua Cabang":
                 filtered_data = [d for d in all_data if d.get('branch') == selected_branch]
             else:
@@ -216,28 +210,40 @@ if menu == "📊 Dashboard Monitoring":
             
             with st.expander(f"📦 Sedang Diproses Gudang - {len(processed_orders)}", expanded=False):
                 if processed_orders:
-                    st.dataframe(processed_orders, use_container_width=True, column_config={
-                        "created_at": "Tanggal", "order_id": "ID", "customer_name": "Customer", 
-                        "product_name": "Barang", "sales_name": "Sales", "status": "Status"
-                    })
+                    clean_wh = []
+                    for x in processed_orders:
+                        tgl_update = x.get('last_updated', x['created_at'])[:16].replace("T", " ")
+                        clean_wh.append({
+                            "ID": x['order_id'], "Customer": x['customer_name'], 
+                            "Barang": x['product_name'], "Status": x['status'], "Update": tgl_update
+                        })
+                    st.dataframe(clean_wh, use_container_width=True)
                 else:
                     st.success("Tidak ada barang antre.")
 
             with st.expander(f"🚚 Sedang Dalam Pengiriman - {len(shipping_orders)}", expanded=False):
                 if shipping_orders:
-                    st.dataframe(shipping_orders, use_container_width=True, column_config={
-                        "created_at": "Tanggal", "order_id": "ID", "customer_name": "Customer", 
-                        "product_name": "Barang", "courier": "Kurir", "status": "Status"
-                    })
+                    clean_ship = []
+                    for x in shipping_orders:
+                        tgl_update = x.get('last_updated', x['created_at'])[:16].replace("T", " ")
+                        clean_ship.append({
+                            "ID": x['order_id'], "Customer": x['customer_name'], 
+                            "Barang": x['product_name'], "Status": x['status'], "Kurir": x['courier'], "Update": tgl_update
+                        })
+                    st.dataframe(clean_ship, use_container_width=True)
                 else:
                     st.info("Tidak ada barang jalan.")
 
             with st.expander(f"✅ Riwayat Selesai - {len(completed_orders)}", expanded=False):
                 if completed_orders:
-                    st.dataframe(completed_orders, use_container_width=True, column_config={
-                        "created_at": "Tanggal", "order_id": "ID", "customer_name": "Customer", 
-                        "product_name": "Barang", "sales_name": "Sales"
-                    })
+                    clean_done = []
+                    for x in completed_orders:
+                        tgl_update = x.get('last_updated', x['created_at'])[:16].replace("T", " ")
+                        clean_done.append({
+                            "ID": x['order_id'], "Customer": x['customer_name'], 
+                            "Barang": x['product_name'], "Status": x['status'], "Waktu Selesai": tgl_update
+                        })
+                    st.dataframe(clean_done, use_container_width=True)
                 else:
                     st.info("Belum ada history selesai.")
         else:
@@ -285,7 +291,8 @@ elif menu == "📝 Input Delivery Order":
                         "delivery_type": in_tipe,
                         "sales_name": in_sales,
                         "branch": cabang_aktif, 
-                        "status": "Menunggu Konfirmasi" 
+                        "status": "Menunggu Konfirmasi",
+                        "last_updated": datetime.now().isoformat()
                     }
                     supabase.table("shipments").insert(payload).execute()
                     
@@ -294,7 +301,12 @@ elif menu == "📝 Input Delivery Order":
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Gagal kirim data (ID mungkin kembar): {e}")
+                    # FIX: Pesan Error Human Friendly
+                    error_msg = str(e)
+                    if "duplicate key" in error_msg or "23505" in error_msg:
+                        st.error(f"⚠️ Gagal! Order ID **{in_id}** sudah terdaftar di sistem. Mohon cek kembali nomornya.")
+                    else:
+                        st.error(f"Terjadi kesalahan sistem: {e}")
             else:
                 st.toast("Gagal! Mohon lengkapi data wajib.", icon="❌")
 
@@ -320,6 +332,13 @@ elif menu == "🔍 Cek Resi (Public)":
                         elif color == "info": st.info(f"Status: {d['status'].upper()}", icon="🚚")
                         else: st.warning(f"Status: {d['status'].upper()}", icon="⏳")
                         
+                        tgl_update = d.get('last_updated', d['created_at'])
+                        try:
+                            dt_obj = datetime.fromisoformat(tgl_update.replace('Z', '+00:00'))
+                            tgl_str = dt_obj.strftime("%d %b %Y, %H:%M WIB")
+                        except:
+                            tgl_str = tgl_update[:16].replace("T", " ")
+
                         st.markdown(f"""
                         ### {d['product_name']}
                         **Rincian Pengiriman:**
@@ -328,11 +347,11 @@ elif menu == "🔍 Cek Resi (Public)":
                         * 🔢 Order ID: `{d['order_id']}`
                         * 🚚 Kurir: {d['courier'] or '-'}
                         * 🔖 Resi: {d['resi'] or '-'}
-                        * 📅 Tgl: {d['created_at'][:10]}
+                        * 🕒 **Update Terakhir:** {tgl_str}
                         """)
                         
                         st.caption("Salin pesan update:")
-                        msg = f"Halo Kak {d['customer_name']}, pesanan {d['product_name']} statusnya: *{d['status']}*.\nKurir: {d['courier'] or '-'}.\nTerima kasih!"
+                        msg = f"Halo Kak {d['customer_name']}, pesanan {d['product_name']} statusnya: *{d['status']}*.\nUpdate: {tgl_str}.\nTerima kasih!"
                         st.code(msg, language=None)
                         st.divider()
                 else:
@@ -386,14 +405,26 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
                 new_resi = st.text_input("Nomor Resi / Plat Nomor", value=curr['resi'] or "")
                 
                 st.divider()
+                st.write("**Waktu Status Terakhir (Sesuai Fakta di Lapangan/Web BES):**")
+                col_tgl, col_jam = st.columns(2)
+                update_date = col_tgl.date_input("Tanggal Kejadian", value="today")
+                update_time = col_jam.time_input("Jam Kejadian", value="now")
+                
+                final_datetime = datetime.combine(update_date, update_time).isoformat()
+
+                st.divider()
                 st.caption("Koreksi Data (Jika Diperlukan)")
                 corr_nama = st.text_input("Nama Customer", value=curr['customer_name'])
                 corr_barang = st.text_input("Nama Barang", value=curr['product_name'])
                 
                 if st.form_submit_button("Simpan Perubahan"):
                     upd = {
-                        "status": new_stat, "courier": new_kurir, "resi": new_resi,
-                        "customer_name": corr_nama, "product_name": corr_barang
+                        "status": new_stat, 
+                        "courier": new_kurir, 
+                        "resi": new_resi,
+                        "customer_name": corr_nama, 
+                        "product_name": corr_barang,
+                        "last_updated": final_datetime
                     }
                     supabase.table("shipments").update(upd).eq("order_id", curr['order_id']).execute()
                     
