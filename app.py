@@ -1,5 +1,5 @@
-# Versi 1.18
-# Update: Memisahkan tampilan Detail Data dari kotak Status agar teks tidak hilang/tenggelam. Layout: Status (Atas) -> Detail (Tengah) -> Template (Bawah).
+# Versi 1.19
+# Update: Menggunakan Expander (Dropdown) di Dashboard agar tabel 'Aktif' dan 'Selesai' tersembunyi secara default. Tampilan lebih rapi.
 
 import streamlit as st
 from supabase import create_client, Client
@@ -85,12 +85,16 @@ if menu == "📊 Dashboard Monitoring":
             total_gudang = 0
             total_jalan = 0
             total_selesai = 0
+            
+            # Pisahkan data ke 2 list berbeda
             active_orders = []
+            completed_orders = []
 
             for item in filtered_data:
                 s = item['status'].lower()
                 if "selesai" in s or "diterima" in s:
                     total_selesai += 1
+                    completed_orders.append(item)
                 elif "dikirim" in s or "jalan" in s or "pengiriman" in s:
                     total_jalan += 1
                     active_orders.append(item)
@@ -104,23 +108,43 @@ if menu == "📊 Dashboard Monitoring":
             c3.metric("✅ Selesai Diterima", f"{total_selesai} Order")
             
             st.divider()
-            st.subheader(f"📋 Barang Belum Sampai ({selected_branch})")
             
-            if active_orders:
-                clean_data = []
-                for x in active_orders:
-                    clean_data.append({
-                        "Order ID": x['order_id'],
-                        "Cabang": x.get('branch', '-'),
-                        "Customer": x['customer_name'],
-                        "Barang": x['product_name'],
-                        "Status": x['status'],
-                        "Kurir": x['courier'] if x['courier'] else "-",
-                        "Tanggal": x['created_at'][:10]
-                    })
-                st.dataframe(clean_data, use_container_width=True)
-            else:
-                st.success(f"Aman! Tidak ada barang pending di {selected_branch}.")
+            # --- BAGIAN 1: BARANG BELUM SELESAI (Expander) ---
+            with st.expander(f"📂 Rincian: Diproses & Dikirim ({len(active_orders)})", expanded=False):
+                if active_orders:
+                    clean_data = []
+                    for x in active_orders:
+                        clean_data.append({
+                            "Order ID": x['order_id'],
+                            "Cabang": x.get('branch', '-'),
+                            "Customer": x['customer_name'],
+                            "Barang": x['product_name'],
+                            "Status": x['status'],
+                            "Kurir": x['courier'] if x['courier'] else "-",
+                            "Tanggal": x['created_at'][:10]
+                        })
+                    st.dataframe(clean_data, use_container_width=True)
+                else:
+                    st.success(f"Aman! Tidak ada barang pending di {selected_branch}.")
+
+            # --- BAGIAN 2: HISTORY SELESAI (Expander) ---
+            with st.expander(f"✅ Rincian: Riwayat Selesai ({len(completed_orders)})", expanded=False):
+                if completed_orders:
+                    clean_history = []
+                    for x in completed_orders:
+                        clean_history.append({
+                            "Order ID": x['order_id'],
+                            "Cabang": x.get('branch', '-'),
+                            "Customer": x['customer_name'],
+                            "Barang": x['product_name'],
+                            "Status": x['status'],
+                            "Penerima/Info": x['resi'] if x['resi'] else "-",
+                            "Tanggal": x['created_at'][:10]
+                        })
+                    st.dataframe(clean_history, use_container_width=True)
+                else:
+                    st.info("Belum ada data pengiriman yang selesai.")
+
         else:
             st.info("Belum ada data pengiriman.")
 
@@ -146,7 +170,6 @@ elif menu == "🔍 Cek Resi (Sales)":
                 
                 if response.data:
                     for data in response.data:
-                        # 1. Tampilkan Banner Status (Paling Atas)
                         color_type = get_status_color(data['status'])
                         status_text = f"Status: {data['status'].upper()}"
                         
@@ -157,7 +180,6 @@ elif menu == "🔍 Cek Resi (Sales)":
                         else: 
                             st.warning(status_text, icon="⏳")
 
-                        # 2. Tampilkan Detail Data (Di Luar Kotak Warna) agar jelas
                         st.markdown(f"""
                         ### {data['product_name']}
                         **Rincian Pengiriman:**
@@ -169,12 +191,11 @@ elif menu == "🔍 Cek Resi (Sales)":
                         * 📅 Update: {data['created_at'][:10]}
                         """)
                         
-                        # 3. Template Pesan (Paling Bawah)
                         st.caption("📋 Template Pesan (Salin):")
                         message = f"Halo Kak {data['customer_name']}, update pesanan *{data['product_name']}*.\nStatus: *{data['status']}*.\nEkspedisi: {data['courier'] or '-'}.\nTerima kasih! - Tim Pengiriman"
                         st.code(message, language=None)
                         
-                        st.divider() # Garis pemisah antar data
+                        st.divider()
                 else:
                     st.warning("❌ Data tidak ditemukan.")
             except Exception as e:
