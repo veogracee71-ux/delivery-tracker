@@ -1,7 +1,7 @@
-# Versi 2.7
+# Versi 2.8
 # Update:
-# 1. Menu Update Status otomatis menutup form (Reset Pilihan) setelah simpan.
-# 2. Memastikan Form Input Order sales benar-benar bersih setelah kirim.
+# 1. Memperbaiki fitur 'Clear Form' pada Sales Input agar benar-benar bersih total setelah kirim.
+# 2. Menambahkan key pada dropdown 'Tipe Pengiriman' agar ikut ter-reset.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -58,11 +58,15 @@ def get_status_color(status):
         return "warning"
 
 def clear_input_form():
-    """Membersihkan session state formulir input sales"""
-    # Kita set semua key input menjadi string kosong
+    """Membersihkan session state formulir input sales secara paksa"""
+    # Reset Text Input jadi kosong
     for key in ["in_id", "in_sales", "in_nama", "in_hp", "in_alamat", "in_barang"]:
         if key in st.session_state:
             st.session_state[key] = ""
+    
+    # Reset Dropdown ke pilihan pertama (Default)
+    if "in_tipe" in st.session_state:
+        st.session_state["in_tipe"] = "Reguler"
 
 # --- SETUP HALAMAN ---
 st.set_page_config(page_title="Delivery Tracker", page_icon="📦", layout="wide") 
@@ -265,7 +269,8 @@ elif menu == "📝 Input Delivery Order":
         
         c5, c6 = st.columns(2)
         in_barang = c5.text_input("Nama Barang", placeholder="Kulkas, TV, dll", key="in_barang")
-        in_tipe = c6.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"])
+        # Menambahkan KEY agar dropdown bisa di-reset
+        in_tipe = c6.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"], key="in_tipe")
         
         submitted = st.form_submit_button("Kirim ke Gudang", type="primary")
         
@@ -286,7 +291,10 @@ elif menu == "📝 Input Delivery Order":
                     supabase.table("shipments").insert(payload).execute()
                     
                     st.toast(f"Sukses! Order {in_id} berhasil dikirim.", icon="✅")
-                    clear_input_form() # Bersihkan Form
+                    
+                    # PANGGIL FUNGSI CLEAR FORM
+                    clear_input_form()
+                    
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
@@ -356,13 +364,13 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
     if recent.data:
         opts = {f"[{d['status']}] {d['order_id']} - {d['customer_name']}": d for d in recent.data}
         
-        # KEY DITAMBAHKAN DISINI agar bisa di-reset
+        # Key untuk reset dropdown
         sel = st.selectbox(
             "Pilih Order:", 
             list(opts.keys()), 
             index=None, 
             placeholder="Pilih order untuk diproses...",
-            key="update_order_selector" # Kunci unik
+            key="update_order_selector" 
         )
         
         if sel:
@@ -399,7 +407,7 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
                     
                     st.toast("Data Terupdate!", icon="✅")
                     
-                    # RESET PILIHAN AGAR FORM MENUTUP
+                    # Reset Selector
                     st.session_state["update_order_selector"] = None
                     
                     time.sleep(1)
