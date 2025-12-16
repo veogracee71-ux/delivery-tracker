@@ -1,10 +1,10 @@
-# Versi 2.6
+# Versi 2.7
 # Update:
-# 1. Menambahkan Integrasi Website Tracking PT. BES (Link & Iframe) di menu Update Status.
-# 2. Tombol tetap Biru Blibli.
+# 1. Menu Update Status otomatis menutup form (Reset Pilihan) setelah simpan.
+# 2. Memastikan Form Input Order sales benar-benar bersih setelah kirim.
 
 import streamlit as st
-import streamlit.components.v1 as components # Import untuk menampilkan website
+import streamlit.components.v1 as components 
 from supabase import create_client, Client
 from urllib.parse import quote
 import time
@@ -58,13 +58,11 @@ def get_status_color(status):
         return "warning"
 
 def clear_input_form():
-    """Membersihkan session state formulir input"""
-    st.session_state["in_id"] = ""
-    st.session_state["in_sales"] = ""
-    st.session_state["in_nama"] = ""
-    st.session_state["in_hp"] = ""
-    st.session_state["in_alamat"] = ""
-    st.session_state["in_barang"] = ""
+    """Membersihkan session state formulir input sales"""
+    # Kita set semua key input menjadi string kosong
+    for key in ["in_id", "in_sales", "in_nama", "in_hp", "in_alamat", "in_barang"]:
+        if key in st.session_state:
+            st.session_state[key] = ""
 
 # --- SETUP HALAMAN ---
 st.set_page_config(page_title="Delivery Tracker", page_icon="📦", layout="wide") 
@@ -269,7 +267,6 @@ elif menu == "📝 Input Delivery Order":
         in_barang = c5.text_input("Nama Barang", placeholder="Kulkas, TV, dll", key="in_barang")
         in_tipe = c6.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"])
         
-        # Tombol otomatis biru
         submitted = st.form_submit_button("Kirim ke Gudang", type="primary")
         
         if submitted:
@@ -287,8 +284,9 @@ elif menu == "📝 Input Delivery Order":
                         "status": "Menunggu Konfirmasi" 
                     }
                     supabase.table("shipments").insert(payload).execute()
+                    
                     st.toast(f"Sukses! Order {in_id} berhasil dikirim.", icon="✅")
-                    clear_input_form()
+                    clear_input_form() # Bersihkan Form
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
@@ -313,11 +311,13 @@ elif menu == "🔍 Cek Resi (Public)":
                 
                 if res.data:
                     for d in res.data:
+                        # 1. Banner Status
                         color = get_status_color(d['status'])
                         if color == "success": st.success(f"Status: {d['status'].upper()}", icon="✅")
                         elif color == "info": st.info(f"Status: {d['status'].upper()}", icon="🚚")
                         else: st.warning(f"Status: {d['status'].upper()}", icon="⏳")
                         
+                        # 2. Detail Data (Text Only)
                         st.markdown(f"""
                         ### {d['product_name']}
                         **Rincian Pengiriman:**
@@ -329,6 +329,7 @@ elif menu == "🔍 Cek Resi (Public)":
                         * 📅 Tgl: {d['created_at'][:10]}
                         """)
                         
+                        # 3. Template Pesan (Full Width)
                         st.caption("Salin pesan update:")
                         msg = f"Halo Kak {d['customer_name']}, pesanan {d['product_name']} statusnya: *{d['status']}*.\nKurir: {d['courier'] or '-'}.\nTerima kasih!"
                         st.code(msg, language=None)
@@ -354,20 +355,24 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
     
     if recent.data:
         opts = {f"[{d['status']}] {d['order_id']} - {d['customer_name']}": d for d in recent.data}
-        sel = st.selectbox("Pilih Order:", list(opts.keys()), index=None, placeholder="Pilih order untuk diproses...")
+        
+        # KEY DITAMBAHKAN DISINI agar bisa di-reset
+        sel = st.selectbox(
+            "Pilih Order:", 
+            list(opts.keys()), 
+            index=None, 
+            placeholder="Pilih order untuk diproses...",
+            key="update_order_selector" # Kunci unik
+        )
         
         if sel:
             curr = opts[sel]
             st.info(f"Edit: **{curr['product_name']}** | Sales: {curr.get('sales_name')}")
             
-            # --- INTEGRASI WEBSITE PT BES (NEW) ---
             with st.expander("🌍 Buka Tracking PT. BES (Cek Resi)"):
                 st.caption("Salin nomor resi yang sudah Anda input, lalu tempel di website di bawah ini.")
                 st.link_button("Buka Website PT. BES di Tab Baru ↗️", "https://www.bes-paket.com/track-package")
-                # Iframe opsional (Mungkin diblokir oleh website target, tapi kita coba tampilkan)
-                st.caption("👇 Tampilan Website Langsung (Jika didukung perangkat):")
                 components.iframe("https://www.bes-paket.com/track-package", height=600, scrolling=True)
-            # --------------------------------------
 
             with st.form("admin_update"):
                 c1, c2 = st.columns(2)
@@ -391,7 +396,12 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
                         "customer_name": corr_nama, "product_name": corr_barang
                     }
                     supabase.table("shipments").update(upd).eq("order_id", curr['order_id']).execute()
+                    
                     st.toast("Data Terupdate!", icon="✅")
+                    
+                    # RESET PILIHAN AGAR FORM MENUTUP
+                    st.session_state["update_order_selector"] = None
+                    
                     time.sleep(1)
                     st.rerun()
 
