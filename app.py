@@ -1,7 +1,7 @@
-# Versi 2.8
+# Versi 2.9
 # Update:
-# 1. Memperbaiki fitur 'Clear Form' pada Sales Input agar benar-benar bersih total setelah kirim.
-# 2. Menambahkan key pada dropdown 'Tipe Pengiriman' agar ikut ter-reset.
+# 1. Menerapkan Isolasi Data di Dashboard. Sales & SPV hanya bisa melihat data cabangnya sendiri (Filter dikunci/dihilangkan).
+# 2. Admin tetap bisa melihat semua cabang.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -59,12 +59,10 @@ def get_status_color(status):
 
 def clear_input_form():
     """Membersihkan session state formulir input sales secara paksa"""
-    # Reset Text Input jadi kosong
     for key in ["in_id", "in_sales", "in_nama", "in_hp", "in_alamat", "in_barang"]:
         if key in st.session_state:
             st.session_state[key] = ""
     
-    # Reset Dropdown ke pilihan pertama (Default)
     if "in_tipe" in st.session_state:
         st.session_state["in_tipe"] = "Reguler"
 
@@ -168,26 +166,29 @@ with st.sidebar:
             st.rerun()
 
 # ==========================================
-# HALAMAN 1: DASHBOARD
+# HALAMAN 1: DASHBOARD (DENGAN ISOLASI DATA)
 # ==========================================
 if menu == "📊 Dashboard Monitoring":
     st.title("📊 Monitoring Operasional")
     
-    default_index = 0
     try:
         response = supabase.table("shipments").select("*").execute()
         all_data = response.data
 
         if all_data:
-            unique_branches = sorted(list(set([d['branch'] for d in all_data if d.get('branch')])))
-            unique_branches.insert(0, "Semua Cabang")
+            # --- LOGIKA ISOLASI DATA (KEAMANAN) ---
+            if st.session_state['user_role'] in ["Sales", "SPV"]:
+                # Jika Sales/SPV, paksa filter ke cabang sendiri
+                selected_branch = st.session_state['user_branch']
+                # Tampilkan info saja, bukan dropdown
+                st.info(f"📍 Menampilkan Data Cabang: **{selected_branch}**")
+            else:
+                # Jika Admin/Guest, boleh pilih semua
+                unique_branches = sorted(list(set([d['branch'] for d in all_data if d.get('branch')])))
+                unique_branches.insert(0, "Semua Cabang")
+                selected_branch = st.selectbox("📍 Filter Cabang (Admin Mode):", unique_branches)
             
-            # Auto-filter jika Sales/SPV login
-            if st.session_state['user_role'] in ["Sales", "SPV"] and st.session_state['user_branch'] in unique_branches:
-                default_index = unique_branches.index(st.session_state['user_branch'])
-
-            selected_branch = st.selectbox("📍 Filter Cabang:", unique_branches, index=default_index)
-            
+            # Terapkan Filter
             if selected_branch != "Semua Cabang":
                 filtered_data = [d for d in all_data if d.get('branch') == selected_branch]
             else:
@@ -213,7 +214,6 @@ if menu == "📊 Dashboard Monitoring":
             
             st.divider()
             
-            # Tabel Default Tertutup (expanded=False)
             with st.expander(f"📦 Sedang Diproses Gudang - {len(processed_orders)}", expanded=False):
                 if processed_orders:
                     st.dataframe(processed_orders, use_container_width=True, column_config={
@@ -269,7 +269,6 @@ elif menu == "📝 Input Delivery Order":
         
         c5, c6 = st.columns(2)
         in_barang = c5.text_input("Nama Barang", placeholder="Kulkas, TV, dll", key="in_barang")
-        # Menambahkan KEY agar dropdown bisa di-reset
         in_tipe = c6.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"], key="in_tipe")
         
         submitted = st.form_submit_button("Kirim ke Gudang", type="primary")
@@ -291,10 +290,7 @@ elif menu == "📝 Input Delivery Order":
                     supabase.table("shipments").insert(payload).execute()
                     
                     st.toast(f"Sukses! Order {in_id} berhasil dikirim.", icon="✅")
-                    
-                    # PANGGIL FUNGSI CLEAR FORM
                     clear_input_form()
-                    
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
@@ -319,13 +315,11 @@ elif menu == "🔍 Cek Resi (Public)":
                 
                 if res.data:
                     for d in res.data:
-                        # 1. Banner Status
                         color = get_status_color(d['status'])
                         if color == "success": st.success(f"Status: {d['status'].upper()}", icon="✅")
                         elif color == "info": st.info(f"Status: {d['status'].upper()}", icon="🚚")
                         else: st.warning(f"Status: {d['status'].upper()}", icon="⏳")
                         
-                        # 2. Detail Data (Text Only)
                         st.markdown(f"""
                         ### {d['product_name']}
                         **Rincian Pengiriman:**
@@ -337,7 +331,6 @@ elif menu == "🔍 Cek Resi (Public)":
                         * 📅 Tgl: {d['created_at'][:10]}
                         """)
                         
-                        # 3. Template Pesan (Full Width)
                         st.caption("Salin pesan update:")
                         msg = f"Halo Kak {d['customer_name']}, pesanan {d['product_name']} statusnya: *{d['status']}*.\nKurir: {d['courier'] or '-'}.\nTerima kasih!"
                         st.code(msg, language=None)
@@ -364,7 +357,6 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
     if recent.data:
         opts = {f"[{d['status']}] {d['order_id']} - {d['customer_name']}": d for d in recent.data}
         
-        # Key untuk reset dropdown
         sel = st.selectbox(
             "Pilih Order:", 
             list(opts.keys()), 
@@ -406,10 +398,7 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
                     supabase.table("shipments").update(upd).eq("order_id", curr['order_id']).execute()
                     
                     st.toast("Data Terupdate!", icon="✅")
-                    
-                    # Reset Selector
                     st.session_state["update_order_selector"] = None
-                    
                     time.sleep(1)
                     st.rerun()
 
