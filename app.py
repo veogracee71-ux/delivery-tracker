@@ -1,5 +1,5 @@
-# Versi 1.13
-# Update: Fix Error 'AlertMixin.success() missing body' pada Dashboard Monitoring.
+# Versi 1.14
+# Update: Fix Error 'AlertMixin.warning() missing body' pada halaman Sales (Cek Resi).
 
 import streamlit as st
 from supabase import create_client, Client
@@ -120,7 +120,6 @@ if menu == "📊 Dashboard Monitoring":
                     })
                 st.dataframe(clean_data, use_container_width=True)
             else:
-                # FIX: Menambahkan string body ke st.success
                 st.success(f"Aman! Tidak ada barang pending di {selected_branch}.")
         else:
             st.info("Belum ada data pengiriman.")
@@ -153,9 +152,8 @@ elif menu == "🔍 Cek Resi (Sales)":
                         elif color_type == "info": container = st.info
                         else: container = st.warning
                         
-                        # FIX: Container juga wajib ada body text kalau dipakai langsung
-                        with container():
-                            st.markdown(f"### Status: {data['status'].upper()}")
+                        # FIX 1.14: Memasukkan teks status sebagai argumen body
+                        with container(f"Status: {data['status'].upper()}"):
                             c1, c2 = st.columns([3, 1])
                             with c1:
                                 st.markdown(f"""
