@@ -1,5 +1,5 @@
-# Versi 1.16
-# Update: Menambahkan baris 'Status' secara eksplisit di dalam rincian data Sales agar lebih terlihat jelas.
+# Versi 1.17
+# Update: Mengubah layout Template Pesan menjadi Full Width (di bawah data) agar tombol Salin terlihat jelas dan tidak mepet.
 
 import streamlit as st
 from supabase import create_client, Client
@@ -153,24 +153,23 @@ elif menu == "🔍 Cek Resi (Sales)":
                         else: container = st.warning
                         
                         with container(f"Status: {data['status'].upper()}"):
-                            c1, c2 = st.columns([2, 1])
-                            with c1:
-                                # Update 1.16: Menambahkan Status secara eksplisit di sini
-                                st.markdown(f"""
-                                **{data['product_name']}**
-                                * 📦 Status: **{data['status']}**
-                                * 🏢 Cabang: **{data.get('branch', '-')}**
-                                * 👤 Customer: **{data['customer_name']}**
-                                * 🔢 Order ID: `{data['order_id']}`
-                                * 🚚 Kurir: {data['courier'] if data['courier'] else '-'}
-                                * 🔖 Resi/Info: {data['resi'] if data['resi'] else '-'}
-                                * 📅 Update: {data['created_at'][:10]}
-                                """)
+                            # Update 1.17: Menghapus st.columns agar layout Full Width (atas-bawah)
+                            # Ini memastikan tombol Copy/Salin selalu terlihat
+                            st.markdown(f"""
+                            **{data['product_name']}**
+                            * 📦 Status: **{data['status']}**
+                            * 🏢 Cabang: **{data.get('branch', '-')}**
+                            * 👤 Customer: **{data['customer_name']}**
+                            * 🔢 Order ID: `{data['order_id']}`
+                            * 🚚 Kurir: {data['courier'] if data['courier'] else '-'}
+                            * 🔖 Resi/Info: {data['resi'] if data['resi'] else '-'}
+                            * 📅 Update: {data['created_at'][:10]}
+                            """)
                             
-                            with c2:
-                                st.caption("📋 Template Pesan (Salin):")
-                                message = f"Halo Kak {data['customer_name']}, update pesanan *{data['product_name']}*.\nStatus: *{data['status']}*.\nEkspedisi: {data['courier'] or '-'}.\nTerima kasih! - Tim Pengiriman"
-                                st.code(message, language=None)
+                            st.divider() # Garis pemisah visual
+                            st.caption("📋 Template Pesan (Salin):")
+                            message = f"Halo Kak {data['customer_name']}, update pesanan *{data['product_name']}*.\nStatus: *{data['status']}*.\nEkspedisi: {data['courier'] or '-'}.\nTerima kasih! - Tim Pengiriman"
+                            st.code(message, language=None)
                 else:
                     st.warning("❌ Data tidak ditemukan.")
             except Exception as e:
