@@ -127,14 +127,14 @@ with st.sidebar:
     st.caption("© 2025 **Delivery Tracker System**")
     st.caption("🚀 **Versi 2.20 (Beta)**")
     st.caption("Dibuat untuk mempermudah operasional & monitoring pengiriman.")
-    st.caption("_Internal Use Only | Developed by Agung_")
+    st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
 # HALAMAN 1: LOGIN PAGE (KHUSUS GUEST)
 # ==========================================
 if menu == "🔐 Login Staff":
     st.title("🔐 Login Sistem Delivery Tracker")
-    st.info("ℹ️ Klik tanda panah (>) di pojok kiri atas untuk membuka menu lainnya.")
+    st.info("ℹ️ Klik tanda panah (>>) di pojok kiri atas untuk membuka menu lainnya.")
     st.markdown("Silakan login sesuai peran Anda untuk mengakses Dashboard Operasional.")
     
     col_login1, col_login2, col_login3 = st.columns([1, 2, 1])
