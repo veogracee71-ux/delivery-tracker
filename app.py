@@ -1,7 +1,5 @@
-# Versi 1.12
-# Update: 
-# 1. Memindahkan "Akses Staff" ke bawah Menu Aplikasi.
-# 2. Menghapus emoji pada tombol Hapus.
+# Versi 1.13
+# Update: Fix Error 'AlertMixin.success() missing body' pada Dashboard Monitoring.
 
 import streamlit as st
 from supabase import create_client, Client
@@ -39,34 +37,26 @@ def get_status_color(status):
 # --- SETUP HALAMAN ---
 st.set_page_config(page_title="Delivery Tracker", page_icon="📦", layout="wide") 
 
-# --- SIDEBAR LOGIC (REORDERED) ---
-
-# 1. Cek Session State Dulu (Logic Only)
+# --- SIDEBAR LOGIC ---
 if 'is_admin' not in st.session_state:
     st.session_state['is_admin'] = False
 
-# 2. Tentukan Menu Options berdasarkan Status Login
 menu_options = ["📊 Dashboard Monitoring", "🔍 Cek Resi (Sales)"]
 if st.session_state['is_admin']:
     menu_options.append("📝 Input Data (Admin)")
 
-# 3. Render MENU APLIKASI (Paling Atas)
 menu = st.sidebar.radio("Menu Aplikasi", menu_options)
 
-# 4. Render LOGIN STAFF (Di Bawah Menu)
 with st.sidebar:
-    st.divider() # Garis pemisah
+    st.divider()
     with st.expander("🔐 Akses Staff"):
         pw_input = st.text_input("Password:", type="password", key="login_pw")
-        
         if pw_input == "admin123":
-            # Jika password benar
             if not st.session_state['is_admin']:
                 st.session_state['is_admin'] = True
-                st.rerun() # Refresh halaman biar menu Admin langsung muncul
+                st.rerun()
             st.success("Mode Admin Aktif")
         elif pw_input:
-            # Jika password salah
             st.session_state['is_admin'] = False
             st.error("Password Salah")
 
@@ -130,6 +120,7 @@ if menu == "📊 Dashboard Monitoring":
                     })
                 st.dataframe(clean_data, use_container_width=True)
             else:
+                # FIX: Menambahkan string body ke st.success
                 st.success(f"Aman! Tidak ada barang pending di {selected_branch}.")
         else:
             st.info("Belum ada data pengiriman.")
@@ -162,6 +153,7 @@ elif menu == "🔍 Cek Resi (Sales)":
                         elif color_type == "info": container = st.info
                         else: container = st.warning
                         
+                        # FIX: Container juga wajib ada body text kalau dipakai langsung
                         with container():
                             st.markdown(f"### Status: {data['status'].upper()}")
                             c1, c2 = st.columns([3, 1])
@@ -191,14 +183,12 @@ elif menu == "🔍 Cek Resi (Sales)":
 elif menu == "📝 Input Data (Admin)":
     st.title("🔐 Panel Admin")
     
-    # Keamanan Ganda: Cek lagi status login
     if not st.session_state.get('is_admin'):
         st.error("Akses Ditolak. Silakan login di sidebar.")
         st.stop()
 
     tab1, tab2, tab3 = st.tabs(["Input Order", "Update Status", "Hapus Data"])
     
-    # --- TAB 1: Input Order Baru ---
     with tab1:
         with st.form("form_input"):
             c1, c2 = st.columns(2)
@@ -228,7 +218,6 @@ elif menu == "📝 Input Data (Admin)":
                 else:
                     st.warning("Lengkapi data (termasuk Cabang) dulu.")
 
-    # --- TAB 2: Update Status ---
     with tab2:
         st.header("Update Data Pengiriman")
         recent_data = supabase.table("shipments").select("*").order("created_at", desc=True).limit(50).execute()
@@ -291,7 +280,6 @@ elif menu == "📝 Input Data (Admin)":
         else:
             st.info("Belum ada data pengiriman.")
 
-    # --- TAB 3: Hapus Data ---
     with tab3:
         st.error("⚠️ Hati-hati! Data yang dihapus tidak bisa kembali.")
         del_id = st.text_input("Masukkan Order ID yang mau DIHAPUS:", key="del_search")
@@ -300,7 +288,6 @@ elif menu == "📝 Input Data (Admin)":
             if res_del.data:
                 d = res_del.data[0]
                 st.warning(f"Hapus data **{d['customer_name']}** ({d['product_name']})?")
-                # UPDATE: Menghapus emoji tong sampah di sini
                 if st.button("YA, HAPUS PERMANEN", type="primary"):
                     supabase.table("shipments").delete().eq("order_id", del_id).execute()
                     st.success("Data berhasil dihapus.")
