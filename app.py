@@ -1,5 +1,7 @@
-# Versi 2.20
-# Update: Memperbaiki CSS agar SEMUA jenis tombol (termasuk Link Button ke PT. BES) berwarna Biru Blibli.
+# Versi 2.22
+# Update:
+# 1. Mengganti nama pengembang menjadi "Agung Sudrajat".
+# 2. Mengubah simbol panah instruksi login menjadi (>>).
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -79,7 +81,7 @@ st.markdown("""
         background-color: #007AB8 !important;
     }
 
-    /* 3. Tombol Link (st.link_button - FIX UPDATE 2.20) */
+    /* 3. Tombol Link (st.link_button) */
     [data-testid="stLinkButton"] > a {
         background-color: #0095DA !important;
         color: white !important;
@@ -125,8 +127,9 @@ with st.sidebar:
     # --- FOOTER PROFESIONAL ---
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.20 (Beta)**")
+    st.caption("🚀 **Versi 2.22 (Beta)**")
     st.caption("Dibuat untuk mempermudah operasional & monitoring pengiriman.")
+    # Update Nama Pengembang
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -134,6 +137,7 @@ with st.sidebar:
 # ==========================================
 if menu == "🔐 Login Staff":
     st.title("🔐 Login Sistem Delivery Tracker")
+    # Update Simbol Panah
     st.info("ℹ️ Klik tanda panah (>>) di pojok kiri atas untuk membuka menu lainnya.")
     st.markdown("Silakan login sesuai peran Anda untuk mengakses Dashboard Operasional.")
     
@@ -409,7 +413,7 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
             
             with st.expander("🌍 Buka Tracking PT. BES (Cek Resi)"):
                 st.caption("Salin nomor resi yang sudah Anda input, lalu tempel di website di bawah ini.")
-                st.link_button("Buka Website PT. BES di Tab Baru ↗️", "https://www.bes-paket.com/track-package")
+                st.link_button("Buka Website PT. BES di Tab Baru", "https://www.bes-paket.com/track-package")
                 components.iframe("https://www.bes-paket.com/track-package", height=600, scrolling=True)
 
             with st.form("admin_update"):
