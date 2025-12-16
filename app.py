@@ -1,5 +1,8 @@
-# Versi 2.12
-# Update: Fix Error 'NoneType object is not subscriptable' pada tampilan tanggal (Dashboard & Cek Resi).
+# Versi 2.13
+# Update:
+# 1. MEMBATASI AKSES: Dashboard Monitoring disembunyikan dari Guest.
+# 2. LOGIN PAGE: Menu Login dipindah ke halaman utama (bukan sidebar) sebagai gerbang masuk.
+# 3. Guest hanya bisa akses 'Login' dan 'Cek Resi'.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -57,18 +60,16 @@ def get_status_color(status):
         return "warning"
 
 def clear_input_form():
-    """Membersihkan session state formulir input sales secara paksa"""
     for key in ["in_id", "in_sales", "in_nama", "in_hp", "in_alamat", "in_barang"]:
         if key in st.session_state:
             st.session_state[key] = ""
-    
     if "in_tipe" in st.session_state:
         st.session_state["in_tipe"] = "Reguler"
 
 # --- SETUP HALAMAN ---
 st.set_page_config(page_title="Delivery Tracker", page_icon="📦", layout="wide") 
 
-# --- CUSTOM CSS: TOMBOL BIRU BLIBLI ---
+# --- CUSTOM CSS ---
 st.markdown("""
 <style>
     div.stButton > button {
@@ -90,84 +91,99 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR LOGIC ---
+# --- SIDEBAR LOGIC (SECURITY UPDATE) ---
 if 'user_role' not in st.session_state:
     st.session_state['user_role'] = "Guest" 
 if 'user_branch' not in st.session_state:
     st.session_state['user_branch'] = ""
 
-menu_options = ["📊 Dashboard Monitoring", "🔍 Cek Resi (Public)"]
+# LOGIKA MENU DINAMIS
+if st.session_state['user_role'] == "Guest":
+    # Guest HANYA bisa lihat Login dan Cek Resi
+    menu_options = ["🔐 Login Staff", "🔍 Cek Resi (Public)"]
 
-if st.session_state['user_role'] == "Sales":
-    menu_options.insert(0, "📝 Input Delivery Order")
+elif st.session_state['user_role'] == "Sales":
+    # Sales: Input, Dashboard, Cek Resi
+    menu_options = ["📝 Input Delivery Order", "📊 Dashboard Monitoring", "🔍 Cek Resi (Public)"]
 
 elif st.session_state['user_role'] == "SPV":
-    menu_options.insert(0, "📝 Input Delivery Order")
-    menu_options.append("⚙️ Update Status (SPV)")
+    # SPV: Input, Update, Dashboard, Cek Resi
+    menu_options = ["📝 Input Delivery Order", "⚙️ Update Status (SPV)", "📊 Dashboard Monitoring", "🔍 Cek Resi (Public)"]
 
 elif st.session_state['user_role'] == "Admin":
-    menu_options.append("⚙️ Update Status (Admin)")
-    menu_options.append("🗑️ Hapus Data (Admin)")
+    # Admin: Dashboard, Update, Hapus, Cek Resi
+    menu_options = ["📊 Dashboard Monitoring", "⚙️ Update Status (Admin)", "🗑️ Hapus Data (Admin)", "🔍 Cek Resi (Public)"]
 
 menu = st.sidebar.radio("Menu Aplikasi", menu_options)
 
-# --- LOGIN AREA ---
-with st.sidebar:
-    st.divider()
-    if st.session_state['user_role'] == "Guest":
-        with st.expander("🔐 Login Sistem"):
-            login_type = st.selectbox("Tipe Login:", ["Sales Cabang", "SPV Cabang", "Admin Pusat"])
+# --- INFO USER & LOGOUT (Di Sidebar Bawah) ---
+if st.session_state['user_role'] != "Guest":
+    with st.sidebar:
+        st.divider()
+        st.info(f"👤 {st.session_state['user_role']} - {st.session_state['user_branch']}")
+        if st.button("Logout / Keluar"):
+            st.session_state['user_role'] = "Guest"
+            st.session_state['user_branch'] = ""
+            st.rerun()
+
+# ==========================================
+# HALAMAN 1: LOGIN PAGE (KHUSUS GUEST)
+# ==========================================
+if menu == "🔐 Login Staff":
+    st.title("🔐 Login Sistem Delivery Tracker")
+    st.markdown("Silakan login sesuai peran Anda untuk mengakses Dashboard Operasional.")
+    
+    col_login1, col_login2, col_login3 = st.columns([1, 2, 1])
+    
+    with col_login2:
+        with st.container(border=True):
+            login_type = st.radio("Pilih Tipe Akun:", ["Sales Cabang", "SPV Cabang", "Admin Pusat"], horizontal=True)
+            st.divider()
             
             if login_type == "Sales Cabang":
                 cabang_list = list(SALES_CREDENTIALS.keys())
-                selected_cabang = st.selectbox("Pilih Cabang:", cabang_list)
+                selected_cabang = st.selectbox("Pilih Cabang Anda:", cabang_list)
                 pw = st.text_input("Password Sales:", type="password")
-                if st.button("Masuk Sales"):
+                if st.button("Masuk sebagai Sales", use_container_width=True):
                     if pw == SALES_CREDENTIALS.get(selected_cabang):
                         st.session_state['user_role'] = "Sales"
                         st.session_state['user_branch'] = selected_cabang
-                        st.toast(f"Selamat Datang Sales {selected_cabang}!", icon="👋")
-                        time.sleep(1)
+                        st.toast("Login Berhasil!", icon="👋")
+                        time.sleep(0.5)
                         st.rerun()
                     else:
                         st.error("Password Salah!")
 
             elif login_type == "SPV Cabang":
                 cabang_list = list(SPV_CREDENTIALS.keys())
-                selected_cabang = st.selectbox("Pilih Cabang:", cabang_list, key="spv_select")
+                selected_cabang = st.selectbox("Pilih Cabang Anda:", cabang_list, key="spv_login_sel")
                 pw = st.text_input("Password SPV:", type="password")
-                if st.button("Masuk SPV"):
+                if st.button("Masuk sebagai SPV", use_container_width=True):
                     if pw == SPV_CREDENTIALS.get(selected_cabang):
                         st.session_state['user_role'] = "SPV"
                         st.session_state['user_branch'] = selected_cabang
-                        st.toast(f"Selamat Datang SPV {selected_cabang}!", icon="👔")
-                        time.sleep(1)
+                        st.toast("Login Berhasil!", icon="👔")
+                        time.sleep(0.5)
                         st.rerun()
                     else:
                         st.error("Password Salah!")
 
             else: # Admin Pusat
-                pw_admin = st.text_input("Password Admin:", type="password")
-                if st.button("Masuk Admin"):
+                pw_admin = st.text_input("Password Admin Pusat:", type="password")
+                if st.button("Masuk Admin", use_container_width=True):
                     if pw_admin == ADMIN_PASSWORD:
                         st.session_state['user_role'] = "Admin"
                         st.session_state['user_branch'] = "Pusat"
                         st.toast("Login Admin Berhasil!", icon="🔐")
-                        time.sleep(1)
+                        time.sleep(0.5)
                         st.rerun()
                     else:
                         st.error("Password Salah!")
-    else:
-        st.info(f"Login: {st.session_state['user_role']} ({st.session_state['user_branch']})")
-        if st.button("Logout"):
-            st.session_state['user_role'] = "Guest"
-            st.session_state['user_branch'] = ""
-            st.rerun()
 
 # ==========================================
-# HALAMAN 1: DASHBOARD
+# HALAMAN 2: DASHBOARD (PROTECTED)
 # ==========================================
-if menu == "📊 Dashboard Monitoring":
+elif menu == "📊 Dashboard Monitoring":
     st.title("📊 Monitoring Operasional")
     
     try:
@@ -212,7 +228,6 @@ if menu == "📊 Dashboard Monitoring":
                 if processed_orders:
                     clean_wh = []
                     for x in processed_orders:
-                        # FIX 2.12: Gunakan 'or' agar jika last_updated None, pakai created_at
                         tgl_update = (x.get('last_updated') or x['created_at'])[:16].replace("T", " ")
                         clean_wh.append({
                             "ID": x['order_id'], "Customer": x['customer_name'], 
@@ -226,7 +241,6 @@ if menu == "📊 Dashboard Monitoring":
                 if shipping_orders:
                     clean_ship = []
                     for x in shipping_orders:
-                        # FIX 2.12: Gunakan 'or'
                         tgl_update = (x.get('last_updated') or x['created_at'])[:16].replace("T", " ")
                         clean_ship.append({
                             "ID": x['order_id'], "Customer": x['customer_name'], 
@@ -240,7 +254,6 @@ if menu == "📊 Dashboard Monitoring":
                 if completed_orders:
                     clean_done = []
                     for x in completed_orders:
-                        # FIX 2.12: Gunakan 'or'
                         tgl_update = (x.get('last_updated') or x['created_at'])[:16].replace("T", " ")
                         clean_done.append({
                             "ID": x['order_id'], "Customer": x['customer_name'], 
@@ -255,7 +268,7 @@ if menu == "📊 Dashboard Monitoring":
         st.error(f"Error: {e}")
 
 # ==========================================
-# HALAMAN 2: INPUT ORDER (SALES & SPV)
+# HALAMAN 3: INPUT ORDER (SALES & SPV)
 # ==========================================
 elif menu == "📝 Input Delivery Order":
     st.title("📝 Input Delivery Order")
@@ -313,10 +326,11 @@ elif menu == "📝 Input Delivery Order":
                 st.toast("Gagal! Mohon lengkapi data wajib.", icon="❌")
 
 # ==========================================
-# HALAMAN 3: CEK RESI (PUBLIC)
+# HALAMAN 4: CEK RESI (PUBLIC)
 # ==========================================
 elif menu == "🔍 Cek Resi (Public)":
     st.title("🔍 Cek Status Pengiriman")
+    st.markdown("Fitur ini dapat diakses oleh Staff dan Customer tanpa login.")
     query = st.text_input("Masukkan Order ID / Nama Customer:")
 
     if st.button("Lacak") or query:
@@ -334,7 +348,6 @@ elif menu == "🔍 Cek Resi (Public)":
                         elif color == "info": st.info(f"Status: {d['status'].upper()}", icon="🚚")
                         else: st.warning(f"Status: {d['status'].upper()}", icon="⏳")
                         
-                        # FIX 2.12: Gunakan 'or' untuk fallback jika last_updated None
                         tgl_update = d.get('last_updated') or d['created_at']
                         try:
                             dt_obj = datetime.fromisoformat(tgl_update.replace('Z', '+00:00'))
@@ -363,7 +376,7 @@ elif menu == "🔍 Cek Resi (Public)":
                 st.error(f"Error: {e}")
 
 # ==========================================
-# HALAMAN 4: UPDATE STATUS (SPV & ADMIN)
+# HALAMAN 5: UPDATE STATUS (SPV & ADMIN)
 # ==========================================
 elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SPV)":
     st.title("⚙️ Validasi & Update Order")
@@ -437,7 +450,7 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
                     st.rerun()
 
 # ==========================================
-# HALAMAN 5: HAPUS DATA (KHUSUS ADMIN)
+# HALAMAN 6: HAPUS DATA (KHUSUS ADMIN)
 # ==========================================
 elif menu == "🗑️ Hapus Data (Admin)":
     st.title("🗑️ Hapus Data")
