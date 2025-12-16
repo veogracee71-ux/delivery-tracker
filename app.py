@@ -1,13 +1,11 @@
-# Versi 1.3
+# Versi 1.4
 # Update:
-# 1. Fitur Search by Name (Pencarian nama customer)
-# 2. Fitur Hapus Data (Tab baru di Admin)
-# 3. Visualisasi Warna Status (Kuning/Biru/Hijau)
-# 4. Tombol Share to WA
+# 1. Menu Baru: Dashboard Monitoring (Statistik & Tabel Aktif)
+# 2. Fitur Search by Name, Hapus Data, & Warna Status (Tetap ada)
 
 import streamlit as st
 from supabase import create_client, Client
-from urllib.parse import quote # Untuk encode pesan WA
+from urllib.parse import quote
 
 # --- KONFIGURASI DARI SECRETS ---
 try:
@@ -38,45 +36,108 @@ def get_status_color(status):
         return "warning" # Kuning (Default/Proses)
 
 # --- MENU NAVIGASI ---
-st.set_page_config(page_title="Blibli Tracker", page_icon="📦")
-menu = st.sidebar.radio("Menu Aplikasi", ["🔍 Cek Resi (Sales)", "📝 Input Data (Admin)"])
+st.set_page_config(page_title="Blibli Tracker", page_icon="📦", layout="wide") # Layout wide biar dashboard lega
+# Menu Dashboard ditaruh paling atas
+menu = st.sidebar.radio("Menu Aplikasi", ["📊 Dashboard Monitoring", "🔍 Cek Resi (Sales)", "📝 Input Data (Admin)"])
 
 # ==========================================
-# HALAMAN 1: SALES (Pencarian Cerdas)
+# HALAMAN 1: DASHBOARD (Monitoring Global)
 # ==========================================
-if menu == "🔍 Cek Resi (Sales)":
+if menu == "📊 Dashboard Monitoring":
+    st.title("📊 Monitoring Operasional")
+    st.markdown("Rekapitulasi status pengiriman barang secara real-time.")
+
+    try:
+        # Ambil semua data
+        response = supabase.table("shipments").select("*").execute()
+        all_data = response.data
+
+        if all_data:
+            # Hitung Statistik Manual (Python)
+            total_gudang = 0
+            total_jalan = 0
+            total_selesai = 0
+            
+            # List untuk tabel detail yang belum selesai
+            active_orders = []
+
+            for item in all_data:
+                s = item['status'].lower()
+                
+                # Logika Pengelompokan Status
+                if "selesai" in s or "diterima" in s:
+                    total_selesai += 1
+                elif "dikirim" in s or "jalan" in s or "pengiriman" in s:
+                    total_jalan += 1
+                    active_orders.append(item) # Masukkan ke list aktif
+                else:
+                    # Asumsi sisanya adalah 'Diproses Gudang' atau 'Menunggu Kurir'
+                    total_gudang += 1
+                    active_orders.append(item) # Masukkan ke list aktif
+
+            # 1. Tampilkan Statistik dalam 3 Kolom
+            c1, c2, c3 = st.columns(3)
+            c1.metric("📦 Diproses Gudang", f"{total_gudang} Order", delta_color="off")
+            c2.metric("🚚 Sedang Jalan", f"{total_jalan} Order", delta_color="normal")
+            c3.metric("✅ Selesai Diterima", f"{total_selesai} Order", delta_color="off")
+            
+            st.divider()
+
+            # 2. Tabel Monitoring Barang Aktif (Yang belum selesai)
+            st.subheader("📋 Daftar Barang Belum Sampai")
+            st.caption("Tabel ini hanya menampilkan order yang statusnya 'Diproses' atau 'Sedang Jalan'.")
+
+            if active_orders:
+                # Format data agar enak dilihat di tabel
+                clean_data = []
+                for x in active_orders:
+                    clean_data.append({
+                        "Order ID": x['order_id'],
+                        "Customer": x['customer_name'],
+                        "Barang": x['product_name'],
+                        "Status": x['status'],
+                        "Kurir": x['courier'] if x['courier'] else "-",
+                        "Tanggal Input": x['created_at'][:10]
+                    })
+                
+                st.dataframe(clean_data, use_container_width=True)
+            else:
+                st.success("Luar biasa! Tidak ada barang pending. Semua pengiriman sudah selesai.")
+
+        else:
+            st.info("Belum ada data pengiriman sama sekali.")
+
+    except Exception as e:
+        st.error(f"Gagal memuat dashboard: {e}")
+
+
+# ==========================================
+# HALAMAN 2: SALES (Pencarian Cerdas)
+# ==========================================
+elif menu == "🔍 Cek Resi (Sales)":
     st.title("📦 Cek Status Pengiriman")
     st.markdown("Cari berdasarkan **Order ID** atau **Nama Customer**.")
 
-    # Input Pencarian
     query = st.text_input("Ketik disini:", placeholder="Contoh: 12187... atau 'Iis Lita'")
 
     if st.button("Lacak Paket") or query:
         if query:
             try:
-                # LOGIKA PENCARIAN CERDAS
-                # Jika input angka semua & panjang, asumsi Order ID
                 if query.isdigit() and len(query) > 5:
                     response = supabase.table("shipments").select("*").eq("order_id", query.strip()).execute()
                 else:
-                    # Jika ada huruf, cari Nama Customer (ilike = case insensitive search)
-                    # %query% artinya mencari teks yang mengandung kata tersebut
                     response = supabase.table("shipments").select("*").ilike("customer_name", f"%{query}%").execute()
                 
                 if response.data:
-                    # Loop hasil (karena cari nama bisa muncul lebih dari 1 orang)
                     for data in response.data:
                         color_type = get_status_color(data['status'])
                         
-                        # Tampilan Kartu Visual
-                        if color_type == "success":
-                            container = st.success
-                        elif color_type == "info":
-                            container = st.info
-                        else:
-                            container = st.warning
+                        if color_type == "success": container = st.success
+                        elif color_type == "info": container = st.info
+                        else: container = st.warning
                             
-                        with container(f"Status: {data['status'].upper()}"):
+                        with container():
+                            st.markdown(f"### Status: {data['status'].upper()}")
                             c1, c2 = st.columns([3, 1])
                             with c1:
                                 st.markdown(f"""
@@ -87,20 +148,17 @@ if menu == "🔍 Cek Resi (Sales)":
                                 * 🔖 Resi/Info: {data['resi'] if data['resi'] else '-'}
                                 * 📅 Update: {data['created_at'][:10]}
                                 """)
-                            
-                            # Tombol Share WA
                             with c2:
-                                message = f"Halo Kak {data['customer_name']}, update untuk pesanan *{data['product_name']}*.\n\nStatus saat ini: *{data['status']}*.\nEkspedisi: {data['courier'] or '-'}.\n\nTerima kasih! - Blibli Elektronik"
+                                message = f"Halo Kak {data['customer_name']}, update pesanan *{data['product_name']}*.\nStatus: *{data['status']}*.\nEkspedisi: {data['courier'] or '-'}.\nTerima kasih! - Blibli Elektronik"
                                 wa_link = f"https://wa.me/?text={quote(message)}"
                                 st.link_button("📲 Chat Customer", wa_link)
-                            
                 else:
-                    st.warning("❌ Data tidak ditemukan. Coba cek ejaan nama atau nomor ID.")
+                    st.warning("❌ Data tidak ditemukan.")
             except Exception as e:
                 st.error(f"Error koneksi: {e}")
 
 # ==========================================
-# HALAMAN 2: ADMIN (Input, Update, Hapus)
+# HALAMAN 3: ADMIN (Input, Update, Hapus)
 # ==========================================
 elif menu == "📝 Input Data (Admin)":
     st.title("🔐 Akses Admin")
@@ -110,7 +168,6 @@ elif menu == "📝 Input Data (Admin)":
         st.success("Login Berhasil!")
         st.divider()
         
-        # Tab Menu Admin
         tab1, tab2, tab3 = st.tabs(["Input Order", "Update Status", "Hapus Data"])
         
         # --- TAB 1: Input Baru ---
@@ -163,31 +220,21 @@ elif menu == "📝 Input Data (Admin)":
                 else:
                     st.caption("Data tidak ditemukan.")
 
-        # --- TAB 3: Hapus Data (FITUR BARU) ---
+        # --- TAB 3: Hapus Data ---
         with tab3:
             st.error("⚠️ Hati-hati! Data yang dihapus tidak bisa kembali.")
             del_id = st.text_input("Masukkan Order ID yang mau DIHAPUS:", key="del_search")
             
             if del_id:
-                # Cek dulu datanya ada gak
                 res_del = supabase.table("shipments").select("*").eq("order_id", del_id).execute()
                 if res_del.data:
                     d = res_del.data[0]
-                    st.warning(f"Apakah Anda yakin ingin menghapus data **{d['customer_name']}** ({d['product_name']})?")
-                    
-                    # Tombol konfirmasi hapus
+                    st.warning(f"Hapus data **{d['customer_name']}** ({d['product_name']})?")
                     if st.button("🗑️ YA, HAPUS PERMANEN", type="primary"):
                         supabase.table("shipments").delete().eq("order_id", del_id).execute()
-                        st.success(f"Data Order ID {del_id} berhasil dihapus.")
+                        st.success("Data berhasil dihapus.")
                 else:
                     st.caption("Data tidak ditemukan.")
-
-        # Tabel Monitoring 10 Terakhir
-        st.divider()
-        st.caption("Monitoring 10 Data Terakhir")
-        data_log = supabase.table("shipments").select("order_id, customer_name, status").order("created_at", desc=True).limit(10).execute()
-        if data_log.data:
-            st.dataframe(data_log.data)
             
     elif password:
         st.error("Password salah!")
