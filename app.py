@@ -1,5 +1,7 @@
-# Versi 1.11
-# Update: Menyembunyikan Menu Admin. Hanya muncul jika login via "Akses Staff" di sidebar bawah.
+# Versi 1.12
+# Update: 
+# 1. Memindahkan "Akses Staff" ke bawah Menu Aplikasi.
+# 2. Menghapus emoji pada tombol Hapus.
 
 import streamlit as st
 from supabase import create_client, Client
@@ -37,32 +39,36 @@ def get_status_color(status):
 # --- SETUP HALAMAN ---
 st.set_page_config(page_title="Delivery Tracker", page_icon="📦", layout="wide") 
 
-# --- SIDEBAR LOGIC (HIDDEN ADMIN) ---
-# Menu default (Public)
-menu_options = ["📊 Dashboard Monitoring", "🔍 Cek Resi (Sales)"]
+# --- SIDEBAR LOGIC (REORDERED) ---
 
-# Cek Session State untuk Admin
+# 1. Cek Session State Dulu (Logic Only)
 if 'is_admin' not in st.session_state:
     st.session_state['is_admin'] = False
 
-# Tombol Login Tersembunyi di Bawah Sidebar
+# 2. Tentukan Menu Options berdasarkan Status Login
+menu_options = ["📊 Dashboard Monitoring", "🔍 Cek Resi (Sales)"]
+if st.session_state['is_admin']:
+    menu_options.append("📝 Input Data (Admin)")
+
+# 3. Render MENU APLIKASI (Paling Atas)
+menu = st.sidebar.radio("Menu Aplikasi", menu_options)
+
+# 4. Render LOGIN STAFF (Di Bawah Menu)
 with st.sidebar:
     st.divider() # Garis pemisah
     with st.expander("🔐 Akses Staff"):
         pw_input = st.text_input("Password:", type="password", key="login_pw")
+        
         if pw_input == "admin123":
-            st.session_state['is_admin'] = True
+            # Jika password benar
+            if not st.session_state['is_admin']:
+                st.session_state['is_admin'] = True
+                st.rerun() # Refresh halaman biar menu Admin langsung muncul
             st.success("Mode Admin Aktif")
         elif pw_input:
+            # Jika password salah
             st.session_state['is_admin'] = False
             st.error("Password Salah")
-            
-# Jika password benar, tambahkan menu Admin
-if st.session_state['is_admin']:
-    menu_options.append("📝 Input Data (Admin)")
-
-# Render Menu Utama
-menu = st.sidebar.radio("Menu Aplikasi", menu_options)
 
 # ==========================================
 # HALAMAN 1: DASHBOARD (Monitoring Global)
@@ -294,7 +300,8 @@ elif menu == "📝 Input Data (Admin)":
             if res_del.data:
                 d = res_del.data[0]
                 st.warning(f"Hapus data **{d['customer_name']}** ({d['product_name']})?")
-                if st.button("🗑️ YA, HAPUS PERMANEN", type="primary"):
+                # UPDATE: Menghapus emoji tong sampah di sini
+                if st.button("YA, HAPUS PERMANEN", type="primary"):
                     supabase.table("shipments").delete().eq("order_id", del_id).execute()
                     st.success("Data berhasil dihapus.")
                     time.sleep(1)
