@@ -1,5 +1,5 @@
-# Versi 2.18
-# Update: Mengganti nama pengembang menjadi "Agung" dan memastikan sidebar default tertutup.
+# Versi 2.19
+# Update: Mengubah tahun copyright di footer menjadi 2025.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -103,10 +103,10 @@ with st.sidebar:
             st.session_state['user_branch'] = ""
             st.rerun()
     
-    # --- FOOTER PROFESIONAL ---
+    # --- FOOTER PROFESIONAL (UPDATED YEAR) ---
     st.markdown("---")
-    st.caption("© 2024 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.18 (Beta)**")
+    st.caption("© 2025 **Delivery Tracker System**")
+    st.caption("🚀 **Versi 2.19 (Beta)**")
     st.caption("Dibuat untuk mempermudah operasional & monitoring pengiriman.")
     st.caption("_Internal Use Only | Developed by Agung_")
 
