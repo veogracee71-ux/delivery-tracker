@@ -1,5 +1,5 @@
-# Versi 1.17
-# Update: Mengubah layout Template Pesan menjadi Full Width (di bawah data) agar tombol Salin terlihat jelas dan tidak mepet.
+# Versi 1.18
+# Update: Memisahkan tampilan Detail Data dari kotak Status agar teks tidak hilang/tenggelam. Layout: Status (Atas) -> Detail (Tengah) -> Template (Bawah).
 
 import streamlit as st
 from supabase import create_client, Client
@@ -146,30 +146,35 @@ elif menu == "🔍 Cek Resi (Sales)":
                 
                 if response.data:
                     for data in response.data:
+                        # 1. Tampilkan Banner Status (Paling Atas)
                         color_type = get_status_color(data['status'])
+                        status_text = f"Status: {data['status'].upper()}"
                         
-                        if color_type == "success": container = st.success
-                        elif color_type == "info": container = st.info
-                        else: container = st.warning
+                        if color_type == "success": 
+                            st.success(status_text, icon="✅")
+                        elif color_type == "info": 
+                            st.info(status_text, icon="🚚")
+                        else: 
+                            st.warning(status_text, icon="⏳")
+
+                        # 2. Tampilkan Detail Data (Di Luar Kotak Warna) agar jelas
+                        st.markdown(f"""
+                        ### {data['product_name']}
+                        **Rincian Pengiriman:**
+                        * 🏢 Cabang: **{data.get('branch', '-')}**
+                        * 👤 Customer: **{data['customer_name']}**
+                        * 🔢 Order ID: `{data['order_id']}`
+                        * 🚚 Kurir: {data['courier'] if data['courier'] else '-'}
+                        * 🔖 Resi/Info: {data['resi'] if data['resi'] else '-'}
+                        * 📅 Update: {data['created_at'][:10]}
+                        """)
                         
-                        with container(f"Status: {data['status'].upper()}"):
-                            # Update 1.17: Menghapus st.columns agar layout Full Width (atas-bawah)
-                            # Ini memastikan tombol Copy/Salin selalu terlihat
-                            st.markdown(f"""
-                            **{data['product_name']}**
-                            * 📦 Status: **{data['status']}**
-                            * 🏢 Cabang: **{data.get('branch', '-')}**
-                            * 👤 Customer: **{data['customer_name']}**
-                            * 🔢 Order ID: `{data['order_id']}`
-                            * 🚚 Kurir: {data['courier'] if data['courier'] else '-'}
-                            * 🔖 Resi/Info: {data['resi'] if data['resi'] else '-'}
-                            * 📅 Update: {data['created_at'][:10]}
-                            """)
-                            
-                            st.divider() # Garis pemisah visual
-                            st.caption("📋 Template Pesan (Salin):")
-                            message = f"Halo Kak {data['customer_name']}, update pesanan *{data['product_name']}*.\nStatus: *{data['status']}*.\nEkspedisi: {data['courier'] or '-'}.\nTerima kasih! - Tim Pengiriman"
-                            st.code(message, language=None)
+                        # 3. Template Pesan (Paling Bawah)
+                        st.caption("📋 Template Pesan (Salin):")
+                        message = f"Halo Kak {data['customer_name']}, update pesanan *{data['product_name']}*.\nStatus: *{data['status']}*.\nEkspedisi: {data['courier'] or '-'}.\nTerima kasih! - Tim Pengiriman"
+                        st.code(message, language=None)
+                        
+                        st.divider() # Garis pemisah antar data
                 else:
                     st.warning("❌ Data tidak ditemukan.")
             except Exception as e:
