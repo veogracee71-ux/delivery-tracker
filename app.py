@@ -1,8 +1,5 @@
-# Versi 2.2
-# Update: Memisahkan Dashboard Monitoring menjadi 3 bagian tegas:
-# 1. Diproses Gudang (Pending)
-# 2. Sedang Jalan (Shipping)
-# 3. Selesai (Completed)
+# Versi 2.3
+# Update: Mengubah default dropdown Dashboard (Gudang & Jalan) menjadi tertutup agar tampilan lebih rapi.
 
 import streamlit as st
 from supabase import create_client, Client
@@ -153,8 +150,8 @@ if menu == "📊 Dashboard Monitoring":
             
             st.divider()
             
-            # 1. TABEL DIPROSES GUDANG
-            with st.expander(f"📦 Sedang Diproses Gudang - {len(processed_orders)}", expanded=True):
+            # 1. TABEL DIPROSES GUDANG (Default: Tertutup/False)
+            with st.expander(f"📦 Sedang Diproses Gudang - {len(processed_orders)}", expanded=False):
                 if processed_orders:
                     data_wh = []
                     for x in processed_orders:
@@ -170,8 +167,8 @@ if menu == "📊 Dashboard Monitoring":
                 else:
                     st.success("Tidak ada barang antre di gudang.")
 
-            # 2. TABEL SEDANG JALAN
-            with st.expander(f"🚚 Sedang Dalam Pengiriman - {len(shipping_orders)}", expanded=True):
+            # 2. TABEL SEDANG JALAN (Default: Tertutup/False)
+            with st.expander(f"🚚 Sedang Dalam Pengiriman - {len(shipping_orders)}", expanded=False):
                 if shipping_orders:
                     data_ship = []
                     for x in shipping_orders:
@@ -188,7 +185,7 @@ if menu == "📊 Dashboard Monitoring":
                 else:
                     st.info("Tidak ada barang yang sedang di jalan.")
 
-            # 3. TABEL SELESAI
+            # 3. TABEL SELESAI (Default: Tertutup/False)
             with st.expander(f"✅ Riwayat Selesai - {len(completed_orders)}", expanded=False):
                 if completed_orders:
                     data_done = []
