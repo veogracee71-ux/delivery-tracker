@@ -1,7 +1,5 @@
-# Versi 2.16
-# Update:
-# 1. Mengubah Sidebar Default menjadi TERTUTUP (Collapsed) agar layar lega.
-# 2. Menambahkan Footer Disclaimer (Permohonan maaf & Author) di bawah sidebar.
+# Versi 2.18
+# Update: Mengganti nama pengembang menjadi "Agung" dan memastikan sidebar default tertutup.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -15,20 +13,16 @@ st.set_page_config(
     page_title="Delivery Tracker", 
     page_icon="📦", 
     layout="wide", 
-    initial_sidebar_state="collapsed" # Default tertutup agar layar lega
+    initial_sidebar_state="collapsed" 
 )
 
 # --- LOAD KONFIGURASI DARI SECRETS ---
 try:
-    # 1. Koneksi Database Supabase
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
-    
-    # 2. Load Password dari Secrets
     ADMIN_PASSWORD = st.secrets["passwords"]["admin"]
     SALES_CREDENTIALS = st.secrets["passwords"]["sales"]
     SPV_CREDENTIALS = st.secrets["passwords"]["spv"]
-
 except FileNotFoundError:
     st.error("File secrets.toml tidak ditemukan. Harap atur di Dashboard Streamlit.")
     st.stop()
@@ -36,7 +30,6 @@ except KeyError as e:
     st.error(f"Konfigurasi Secrets belum lengkap. Key yang hilang: {e}. Harap cek format secrets.toml Anda.")
     st.stop()
 
-# Inisialisasi Client Supabase
 if not url or "https" not in url:
     st.error("Format SUPABASE_URL salah.")
     st.stop()
@@ -88,7 +81,6 @@ if 'user_role' not in st.session_state:
 if 'user_branch' not in st.session_state:
     st.session_state['user_branch'] = ""
 
-# LOGIKA MENU DINAMIS
 if st.session_state['user_role'] == "Guest":
     menu_options = ["🔐 Login Staff", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "Sales":
@@ -104,7 +96,6 @@ menu = st.sidebar.radio("Menu Aplikasi", menu_options)
 with st.sidebar:
     st.divider()
     
-    # Info User Login
     if st.session_state['user_role'] != "Guest":
         st.info(f"👤 {st.session_state['user_role']} - {st.session_state['user_branch']}")
         if st.button("Logout / Keluar"):
@@ -112,11 +103,12 @@ with st.sidebar:
             st.session_state['user_branch'] = ""
             st.rerun()
     
-    # Footer Disclaimer (Permintaan User)
-    st.caption("---")
-    st.caption("ℹ️ **Catatan Pengembang**")
-    st.caption("Mohon maaf jika aplikasi ini masih banyak kekurangan.")
-    st.caption("_Oleh : Author_")
+    # --- FOOTER PROFESIONAL ---
+    st.markdown("---")
+    st.caption("© 2024 **Delivery Tracker System**")
+    st.caption("🚀 **Versi 2.18 (Beta)**")
+    st.caption("Dibuat untuk mempermudah operasional & monitoring pengiriman.")
+    st.caption("_Internal Use Only | Developed by Agung_")
 
 # ==========================================
 # HALAMAN 1: LOGIN PAGE (KHUSUS GUEST)
