@@ -1,5 +1,5 @@
-# Versi 1.14
-# Update: Fix Error 'AlertMixin.warning() missing body' pada halaman Sales (Cek Resi).
+# Versi 1.16
+# Update: Menambahkan baris 'Status' secara eksplisit di dalam rincian data Sales agar lebih terlihat jelas.
 
 import streamlit as st
 from supabase import create_client, Client
@@ -152,12 +152,13 @@ elif menu == "🔍 Cek Resi (Sales)":
                         elif color_type == "info": container = st.info
                         else: container = st.warning
                         
-                        # FIX 1.14: Memasukkan teks status sebagai argumen body
                         with container(f"Status: {data['status'].upper()}"):
-                            c1, c2 = st.columns([3, 1])
+                            c1, c2 = st.columns([2, 1])
                             with c1:
+                                # Update 1.16: Menambahkan Status secara eksplisit di sini
                                 st.markdown(f"""
                                 **{data['product_name']}**
+                                * 📦 Status: **{data['status']}**
                                 * 🏢 Cabang: **{data.get('branch', '-')}**
                                 * 👤 Customer: **{data['customer_name']}**
                                 * 🔢 Order ID: `{data['order_id']}`
