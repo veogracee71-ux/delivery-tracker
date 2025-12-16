@@ -1,12 +1,12 @@
-# Versi 2.11
-# Update: Mengubah pesan error "Duplicate Key" menjadi bahasa manusia yang mudah dimengerti Sales.
+# Versi 2.12
+# Update: Fix Error 'NoneType object is not subscriptable' pada tampilan tanggal (Dashboard & Cek Resi).
 
 import streamlit as st
 import streamlit.components.v1 as components 
 from supabase import create_client, Client
 from urllib.parse import quote
 import time
-from datetime import datetime, date # Import untuk waktu
+from datetime import datetime, date 
 
 # --- KONFIGURASI PASSWORD (SALES, SPV, ADMIN) ---
 SALES_CREDENTIALS = {
@@ -212,7 +212,8 @@ if menu == "📊 Dashboard Monitoring":
                 if processed_orders:
                     clean_wh = []
                     for x in processed_orders:
-                        tgl_update = x.get('last_updated', x['created_at'])[:16].replace("T", " ")
+                        # FIX 2.12: Gunakan 'or' agar jika last_updated None, pakai created_at
+                        tgl_update = (x.get('last_updated') or x['created_at'])[:16].replace("T", " ")
                         clean_wh.append({
                             "ID": x['order_id'], "Customer": x['customer_name'], 
                             "Barang": x['product_name'], "Status": x['status'], "Update": tgl_update
@@ -225,7 +226,8 @@ if menu == "📊 Dashboard Monitoring":
                 if shipping_orders:
                     clean_ship = []
                     for x in shipping_orders:
-                        tgl_update = x.get('last_updated', x['created_at'])[:16].replace("T", " ")
+                        # FIX 2.12: Gunakan 'or'
+                        tgl_update = (x.get('last_updated') or x['created_at'])[:16].replace("T", " ")
                         clean_ship.append({
                             "ID": x['order_id'], "Customer": x['customer_name'], 
                             "Barang": x['product_name'], "Status": x['status'], "Kurir": x['courier'], "Update": tgl_update
@@ -238,7 +240,8 @@ if menu == "📊 Dashboard Monitoring":
                 if completed_orders:
                     clean_done = []
                     for x in completed_orders:
-                        tgl_update = x.get('last_updated', x['created_at'])[:16].replace("T", " ")
+                        # FIX 2.12: Gunakan 'or'
+                        tgl_update = (x.get('last_updated') or x['created_at'])[:16].replace("T", " ")
                         clean_done.append({
                             "ID": x['order_id'], "Customer": x['customer_name'], 
                             "Barang": x['product_name'], "Status": x['status'], "Waktu Selesai": tgl_update
@@ -301,7 +304,6 @@ elif menu == "📝 Input Delivery Order":
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
-                    # FIX: Pesan Error Human Friendly
                     error_msg = str(e)
                     if "duplicate key" in error_msg or "23505" in error_msg:
                         st.error(f"⚠️ Gagal! Order ID **{in_id}** sudah terdaftar di sistem. Mohon cek kembali nomornya.")
@@ -332,7 +334,8 @@ elif menu == "🔍 Cek Resi (Public)":
                         elif color == "info": st.info(f"Status: {d['status'].upper()}", icon="🚚")
                         else: st.warning(f"Status: {d['status'].upper()}", icon="⏳")
                         
-                        tgl_update = d.get('last_updated', d['created_at'])
+                        # FIX 2.12: Gunakan 'or' untuk fallback jika last_updated None
+                        tgl_update = d.get('last_updated') or d['created_at']
                         try:
                             dt_obj = datetime.fromisoformat(tgl_update.replace('Z', '+00:00'))
                             tgl_str = dt_obj.strftime("%d %b %Y, %H:%M WIB")
