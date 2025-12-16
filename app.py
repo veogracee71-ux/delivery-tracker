@@ -1,10 +1,10 @@
-# Versi 1.10
-# Update: Mengubah dropdown Edit Data agar default-nya kosong (Admin harus pilih manual baru form muncul).
+# Versi 1.11
+# Update: Menyembunyikan Menu Admin. Hanya muncul jika login via "Akses Staff" di sidebar bawah.
 
 import streamlit as st
 from supabase import create_client, Client
 from urllib.parse import quote
-import time # Untuk refresh halaman otomatis
+import time
 
 # --- KONFIGURASI DARI SECRETS ---
 try:
@@ -28,15 +28,41 @@ def get_status_color(status):
     """Menentukan warna notifikasi berdasarkan status"""
     s = status.lower()
     if "selesai" in s or "diterima" in s:
-        return "success" # Hijau
+        return "success"
     elif "dikirim" in s or "jalan" in s or "pengiriman" in s:
-        return "info"    # Biru
+        return "info"
     else:
-        return "warning" # Kuning (Default/Proses)
+        return "warning"
 
-# --- MENU NAVIGASI ---
+# --- SETUP HALAMAN ---
 st.set_page_config(page_title="Delivery Tracker", page_icon="📦", layout="wide") 
-menu = st.sidebar.radio("Menu Aplikasi", ["📊 Dashboard Monitoring", "🔍 Cek Resi (Sales)", "📝 Input Data (Admin)"])
+
+# --- SIDEBAR LOGIC (HIDDEN ADMIN) ---
+# Menu default (Public)
+menu_options = ["📊 Dashboard Monitoring", "🔍 Cek Resi (Sales)"]
+
+# Cek Session State untuk Admin
+if 'is_admin' not in st.session_state:
+    st.session_state['is_admin'] = False
+
+# Tombol Login Tersembunyi di Bawah Sidebar
+with st.sidebar:
+    st.divider() # Garis pemisah
+    with st.expander("🔐 Akses Staff"):
+        pw_input = st.text_input("Password:", type="password", key="login_pw")
+        if pw_input == "admin123":
+            st.session_state['is_admin'] = True
+            st.success("Mode Admin Aktif")
+        elif pw_input:
+            st.session_state['is_admin'] = False
+            st.error("Password Salah")
+            
+# Jika password benar, tambahkan menu Admin
+if st.session_state['is_admin']:
+    menu_options.append("📝 Input Data (Admin)")
+
+# Render Menu Utama
+menu = st.sidebar.radio("Menu Aplikasi", menu_options)
 
 # ==========================================
 # HALAMAN 1: DASHBOARD (Monitoring Global)
@@ -46,25 +72,20 @@ if menu == "📊 Dashboard Monitoring":
     st.markdown("Rekapitulasi status pengiriman barang secara real-time.")
 
     try:
-        # Ambil semua data
         response = supabase.table("shipments").select("*").execute()
         all_data = response.data
 
         if all_data:
-            # --- FITUR BARU: Filter Cabang ---
-            # Ambil daftar unik cabang yang ada di database
             unique_branches = sorted(list(set([d['branch'] for d in all_data if d.get('branch')])))
-            unique_branches.insert(0, "Semua Cabang") # Tambah opsi default
+            unique_branches.insert(0, "Semua Cabang")
             
             selected_branch = st.selectbox("📍 Filter Berdasarkan Cabang:", unique_branches)
             
-            # Filter data sesuai pilihan
             if selected_branch != "Semua Cabang":
                 filtered_data = [d for d in all_data if d.get('branch') == selected_branch]
             else:
                 filtered_data = all_data
 
-            # Hitung Statistik dari data yang sudah difilter
             total_gudang = 0
             total_jalan = 0
             total_selesai = 0
@@ -81,7 +102,6 @@ if menu == "📊 Dashboard Monitoring":
                     total_gudang += 1
                     active_orders.append(item)
 
-            # Tampilkan Angka
             c1, c2, c3 = st.columns(3)
             c1.metric("📦 Diproses Gudang", f"{total_gudang} Order")
             c2.metric("🚚 Sedang Jalan", f"{total_jalan} Order")
@@ -95,7 +115,7 @@ if menu == "📊 Dashboard Monitoring":
                 for x in active_orders:
                     clean_data.append({
                         "Order ID": x['order_id'],
-                        "Cabang": x.get('branch', '-'), # Tampilkan kolom cabang
+                        "Cabang": x.get('branch', '-'),
                         "Customer": x['customer_name'],
                         "Barang": x['product_name'],
                         "Status": x['status'],
@@ -160,131 +180,124 @@ elif menu == "🔍 Cek Resi (Sales)":
                 st.error(f"Error koneksi: {e}")
 
 # ==========================================
-# HALAMAN 3: ADMIN (Input, Update, Hapus)
+# HALAMAN 3: ADMIN (Hidden)
 # ==========================================
 elif menu == "📝 Input Data (Admin)":
-    st.title("🔐 Akses Admin")
-    password = st.text_input("Masukkan Password Admin:", type="password")
+    st.title("🔐 Panel Admin")
     
-    if password == "admin123":
-        st.success("Login Berhasil!")
-        st.divider()
-        
-        tab1, tab2, tab3 = st.tabs(["Input Order", "Update Status", "Hapus Data"])
-        
-        # --- TAB 1: Input Order Baru ---
-        with tab1:
-            with st.form("form_input"):
-                c1, c2 = st.columns(2)
-                input_id = c1.text_input("Order ID (Wajib)", placeholder="12187...")
-                input_nama = c2.text_input("Nama Customer", placeholder="Iis Lita")
-                
-                c3, c4 = st.columns(2)
-                input_barang = c3.text_input("Nama Barang", placeholder="Contoh: Kulkas 2 Pintu")
-                # FITUR BARU: Input Cabang Manual
-                input_cabang = c4.text_input("Cabang Toko", placeholder="Contoh: Bandung")
-                
-                if st.form_submit_button("Simpan Order Baru"):
-                    if input_id and input_nama and input_barang and input_cabang:
-                        try:
-                            data = {
-                                "order_id": input_id,
-                                "customer_name": input_nama,
-                                "product_name": input_barang,
-                                "branch": input_cabang, # Simpan cabang
-                                "status": "Diproses Gudang"
-                            }
-                            supabase.table("shipments").insert(data).execute()
-                            st.toast("✅ Data tersimpan!", icon="🎉")
-                            time.sleep(1)
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Gagal simpan: {e}")
-                    else:
-                        st.warning("Lengkapi data (termasuk Cabang) dulu.")
+    # Keamanan Ganda: Cek lagi status login
+    if not st.session_state.get('is_admin'):
+        st.error("Akses Ditolak. Silakan login di sidebar.")
+        st.stop()
 
-        # --- TAB 2: Update Status ---
-        with tab2:
-            st.header("Update Data Pengiriman")
+    tab1, tab2, tab3 = st.tabs(["Input Order", "Update Status", "Hapus Data"])
+    
+    # --- TAB 1: Input Order Baru ---
+    with tab1:
+        with st.form("form_input"):
+            c1, c2 = st.columns(2)
+            input_id = c1.text_input("Order ID (Wajib)", placeholder="12187...")
+            input_nama = c2.text_input("Nama Customer", placeholder="Iis Lita")
             
-            recent_data = supabase.table("shipments").select("*").order("created_at", desc=True).limit(50).execute()
+            c3, c4 = st.columns(2)
+            input_barang = c3.text_input("Nama Barang", placeholder="Contoh: Kulkas 2 Pintu")
+            input_cabang = c4.text_input("Cabang Toko", placeholder="Contoh: Bandung")
             
-            if recent_data.data:
-                st.caption("Daftar 50 Pengiriman Terakhir:")
-                df_preview = []
-                for d in recent_data.data:
-                    df_preview.append({
-                        "ID": d['order_id'],
-                        "Cabang": d.get('branch', '-'),
-                        "Customer": d['customer_name'],
-                        "Status": d['status'],
-                        "Barang": d['product_name']
-                    })
-                st.dataframe(df_preview, use_container_width=True, height=200)
-
-                st.divider()
-                st.subheader("Edit Data")
-                
-                options_dict = {f"{d['order_id']} - {d['customer_name']} ({d['product_name']})": d for d in recent_data.data}
-                
-                # --- UPDATE: Default Kosong ---
-                selected_label = st.selectbox(
-                    "Pilih Order yang mau diupdate:", 
-                    options=list(options_dict.keys()),
-                    index=None,  # Default kosong
-                    placeholder="-- Klik disini untuk memilih Order --"
-                )
-                
-                if selected_label:
-                    curr = options_dict[selected_label]
-                    
-                    st.info(f"Mengedit: **{curr['customer_name']}** | Cabang: {curr.get('branch', '-')}")
-                    
-                    with st.form("form_update"):
-                        list_status = ["Diproses Gudang", "Menunggu Kurir", "Dalam Pengiriman", "Selesai/Diterima"]
-                        try:
-                            idx_status = list_status.index(curr['status'])
-                        except:
-                            idx_status = 0
-                            
-                        c_up1, c_up2 = st.columns(2)
-                        new_status = c_up1.selectbox("Update Status", list_status, index=idx_status)
-                        new_branch = c_up2.text_input("Koreksi Cabang (Jika perlu)", value=curr.get('branch') or "")
-                        
-                        new_courier = st.text_input("Nama Kurir / Supir", value=curr['courier'] or "")
-                        new_resi = st.text_input("No Resi / Info Lain", value=curr['resi'] or "")
-                        
-                        if st.form_submit_button("Simpan Perubahan"):
-                            upd_data = {
-                                "status": new_status, 
-                                "courier": new_courier, 
-                                "resi": new_resi,
-                                "branch": new_branch
-                            }
-                            supabase.table("shipments").update(upd_data).eq("order_id", curr['order_id']).execute()
-                            st.success("✅ Status berhasil diperbarui!")
-                            time.sleep(1)
-                            st.rerun()
-                else:
-                    st.write("👆 Pilih salah satu data di atas untuk memunculkan formulir edit.")
-            else:
-                st.info("Belum ada data pengiriman.")
-
-        # --- TAB 3: Hapus Data ---
-        with tab3:
-            st.error("⚠️ Hati-hati! Data yang dihapus tidak bisa kembali.")
-            del_id = st.text_input("Masukkan Order ID yang mau DIHAPUS:", key="del_search")
-            if del_id:
-                res_del = supabase.table("shipments").select("*").eq("order_id", del_id).execute()
-                if res_del.data:
-                    d = res_del.data[0]
-                    st.warning(f"Hapus data **{d['customer_name']}** ({d['product_name']})?")
-                    if st.button("🗑️ YA, HAPUS PERMANEN", type="primary"):
-                        supabase.table("shipments").delete().eq("order_id", del_id).execute()
-                        st.success("Data berhasil dihapus.")
+            if st.form_submit_button("Simpan Order Baru"):
+                if input_id and input_nama and input_barang and input_cabang:
+                    try:
+                        data = {
+                            "order_id": input_id,
+                            "customer_name": input_nama,
+                            "product_name": input_barang,
+                            "branch": input_cabang,
+                            "status": "Diproses Gudang"
+                        }
+                        supabase.table("shipments").insert(data).execute()
+                        st.toast("✅ Data tersimpan!", icon="🎉")
                         time.sleep(1)
                         st.rerun()
+                    except Exception as e:
+                        st.error(f"Gagal simpan: {e}")
                 else:
-                    st.caption("Data tidak ditemukan.")
-    elif password:
-        st.error("Password salah!")
+                    st.warning("Lengkapi data (termasuk Cabang) dulu.")
+
+    # --- TAB 2: Update Status ---
+    with tab2:
+        st.header("Update Data Pengiriman")
+        recent_data = supabase.table("shipments").select("*").order("created_at", desc=True).limit(50).execute()
+        
+        if recent_data.data:
+            st.caption("Daftar 50 Pengiriman Terakhir:")
+            df_preview = []
+            for d in recent_data.data:
+                df_preview.append({
+                    "ID": d['order_id'],
+                    "Cabang": d.get('branch', '-'),
+                    "Customer": d['customer_name'],
+                    "Status": d['status'],
+                    "Barang": d['product_name']
+                })
+            st.dataframe(df_preview, use_container_width=True, height=200)
+
+            st.divider()
+            st.subheader("Edit Data")
+            options_dict = {f"{d['order_id']} - {d['customer_name']} ({d['product_name']})": d for d in recent_data.data}
+            
+            selected_label = st.selectbox(
+                "Pilih Order yang mau diupdate:", 
+                options=list(options_dict.keys()),
+                index=None,
+                placeholder="-- Klik disini untuk memilih Order --"
+            )
+            
+            if selected_label:
+                curr = options_dict[selected_label]
+                st.info(f"Mengedit: **{curr['customer_name']}** | Cabang: {curr.get('branch', '-')}")
+                
+                with st.form("form_update"):
+                    list_status = ["Diproses Gudang", "Menunggu Kurir", "Dalam Pengiriman", "Selesai/Diterima"]
+                    try:
+                        idx_status = list_status.index(curr['status'])
+                    except:
+                        idx_status = 0
+                        
+                    c_up1, c_up2 = st.columns(2)
+                    new_status = c_up1.selectbox("Update Status", list_status, index=idx_status)
+                    new_branch = c_up2.text_input("Koreksi Cabang", value=curr.get('branch') or "")
+                    
+                    new_courier = st.text_input("Nama Kurir / Supir", value=curr['courier'] or "")
+                    new_resi = st.text_input("No Resi / Info Lain", value=curr['resi'] or "")
+                    
+                    if st.form_submit_button("Simpan Perubahan"):
+                        upd_data = {
+                            "status": new_status, 
+                            "courier": new_courier, 
+                            "resi": new_resi,
+                            "branch": new_branch
+                        }
+                        supabase.table("shipments").update(upd_data).eq("order_id", curr['order_id']).execute()
+                        st.success("✅ Status berhasil diperbarui!")
+                        time.sleep(1)
+                        st.rerun()
+            else:
+                st.write("👆 Pilih salah satu data di atas untuk memunculkan formulir edit.")
+        else:
+            st.info("Belum ada data pengiriman.")
+
+    # --- TAB 3: Hapus Data ---
+    with tab3:
+        st.error("⚠️ Hati-hati! Data yang dihapus tidak bisa kembali.")
+        del_id = st.text_input("Masukkan Order ID yang mau DIHAPUS:", key="del_search")
+        if del_id:
+            res_del = supabase.table("shipments").select("*").eq("order_id", del_id).execute()
+            if res_del.data:
+                d = res_del.data[0]
+                st.warning(f"Hapus data **{d['customer_name']}** ({d['product_name']})?")
+                if st.button("🗑️ YA, HAPUS PERMANEN", type="primary"):
+                    supabase.table("shipments").delete().eq("order_id", del_id).execute()
+                    st.success("Data berhasil dihapus.")
+                    time.sleep(1)
+                    st.rerun()
+            else:
+                st.caption("Data tidak ditemukan.")
