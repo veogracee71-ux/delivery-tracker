@@ -1,7 +1,5 @@
-# Versi 2.22
-# Update:
-# 1. Mengganti nama pengembang menjadi "Agung Sudrajat".
-# 2. Mengubah simbol panah instruksi login menjadi (>>).
+# Versi 2.23
+# Update: Memperbaiki CSS agar tombol "Simpan Perubahan" (Form Submit Button) pasti berubah menjadi Biru Blibli.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -55,7 +53,7 @@ def clear_input_form():
     if "in_tipe" in st.session_state:
         st.session_state["in_tipe"] = "Reguler"
 
-# --- CUSTOM CSS (UPDATE COMPLETE BLUE THEME) ---
+# --- CUSTOM CSS (UPDATE COMPLETE BLUE THEME - FIX SUBMIT BUTTON) ---
 st.markdown("""
 <style>
     /* 1. Tombol Standar (st.button) */
@@ -71,14 +69,21 @@ st.markdown("""
         color: white !important;
     }
     
-    /* 2. Tombol Submit Form (st.form_submit_button) */
-    div.stForm > div.stFormSubmitButton > button {
+    /* 2. Tombol Submit Form (st.form_submit_button) - FIX SELECTOR */
+    [data-testid="stFormSubmitButton"] > button {
         background-color: #0095DA !important;
         color: white !important;
         border: none !important;
+        font-weight: bold !important;
     }
-    div.stForm > div.stFormSubmitButton > button:hover {
+    [data-testid="stFormSubmitButton"] > button:hover {
         background-color: #007AB8 !important;
+        color: white !important;
+        border: none !important;
+    }
+    [data-testid="stFormSubmitButton"] > button:active {
+        background-color: #005F8F !important;
+        color: white !important;
     }
 
     /* 3. Tombol Link (st.link_button) */
@@ -127,7 +132,7 @@ with st.sidebar:
     # --- FOOTER PROFESIONAL ---
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.22 (Beta)**")
+    st.caption("🚀 **Versi 2.23 (Beta)**")
     st.caption("Dibuat untuk mempermudah operasional & monitoring pengiriman.")
     # Update Nama Pengembang
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
@@ -137,7 +142,6 @@ with st.sidebar:
 # ==========================================
 if menu == "🔐 Login Staff":
     st.title("🔐 Login Sistem Delivery Tracker")
-    # Update Simbol Panah
     st.info("ℹ️ Klik tanda panah (>>) di pojok kiri atas untuk membuka menu lainnya.")
     st.markdown("Silakan login sesuai peran Anda untuk mengakses Dashboard Operasional.")
     
