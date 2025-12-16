@@ -138,16 +138,3 @@ elif menu == "📝 Input Data (Admin)":
     data_log = supabase.table("shipments").select("order_id, customer_name, status").order("created_at", desc=True).limit(10).execute()
     if data_log.data:
         st.dataframe(data_log.data)
-```
-
-### Langkah Wajib: Cek Dashboard Streamlit
-Pastikan Bapak sudah memasukkan Secrets di Dashboard Streamlit Cloud dengan format yang benar:
-
-1.  Buka **Streamlit Cloud Dashboard**.
-2.  Klik titik tiga di sebelah aplikasi Bapak, pilih **Settings**.
-3.  Klik tab **Secrets**.
-4.  Pastikan isinya seperti ini (dengan tanda kutip `"`):
-
-```toml
-SUPABASE_URL = "https://masukkan-url-disini.supabase.co"
-SUPABASE_KEY = "eyJhmasukkan-key-panjang-disini..."
