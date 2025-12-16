@@ -1,8 +1,7 @@
-# Versi 2.13
+# Versi 2.14
 # Update:
-# 1. MEMBATASI AKSES: Dashboard Monitoring disembunyikan dari Guest.
-# 2. LOGIN PAGE: Menu Login dipindah ke halaman utama (bukan sidebar) sebagai gerbang masuk.
-# 3. Guest hanya bisa akses 'Login' dan 'Cek Resi'.
+# 1. KEAMANAN: Memindahkan semua password (Sales, SPV, Admin) ke dalam Streamlit Secrets.
+# 2. Kode sekarang bersih dari password yang tertulis manual.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -11,38 +10,29 @@ from urllib.parse import quote
 import time
 from datetime import datetime, date 
 
-# --- KONFIGURASI PASSWORD (SALES, SPV, ADMIN) ---
-SALES_CREDENTIALS = {
-    "Kopo Bandung": "kopo123",
-    "Banjaran Bandung": "banjaran123",
-    "Moh. Toha Bandung": "toha123",
-    "Ujung Berung Bandung": "uber123",
-    "Margacinta Bandung": "marga123",
-    "Kalimalang Bekasi": "bekasi123"
-}
+# --- KONFIGURASI HALAMAN ---
+st.set_page_config(page_title="Delivery Tracker", page_icon="📦", layout="wide") 
 
-SPV_CREDENTIALS = {
-    "Kopo Bandung": "spvkopo",
-    "Banjaran Bandung": "spvbanjaran",
-    "Moh. Toha Bandung": "spvtoha",
-    "Ujung Berung Bandung": "spvuber",
-    "Margacinta Bandung": "spvmarga",
-    "Kalimalang Bekasi": "spvbekasi"
-}
-
-ADMIN_PASSWORD = "admin123" 
-
-# --- KONFIGURASI DARI SECRETS ---
+# --- LOAD KONFIGURASI DARI SECRETS ---
 try:
+    # 1. Koneksi Database Supabase
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
+    
+    # 2. Load Password dari Secrets
+    # Pastikan di secrets.toml sudah ada bagian [passwords], [passwords.sales], dan [passwords.spv]
+    ADMIN_PASSWORD = st.secrets["passwords"]["admin"]
+    SALES_CREDENTIALS = st.secrets["passwords"]["sales"]
+    SPV_CREDENTIALS = st.secrets["passwords"]["spv"]
+
 except FileNotFoundError:
-    st.error("File secrets.toml tidak ditemukan.")
+    st.error("File secrets.toml tidak ditemukan. Harap atur di Dashboard Streamlit.")
     st.stop()
-except KeyError:
-    st.error("Secrets belum diatur dengan benar.")
+except KeyError as e:
+    st.error(f"Konfigurasi Secrets belum lengkap. Key yang hilang: {e}. Harap cek format secrets.toml Anda.")
     st.stop()
 
+# Inisialisasi Client Supabase
 if not url or "https" not in url:
     st.error("Format SUPABASE_URL salah.")
     st.stop()
@@ -66,9 +56,6 @@ def clear_input_form():
     if "in_tipe" in st.session_state:
         st.session_state["in_tipe"] = "Reguler"
 
-# --- SETUP HALAMAN ---
-st.set_page_config(page_title="Delivery Tracker", page_icon="📦", layout="wide") 
-
 # --- CUSTOM CSS ---
 st.markdown("""
 <style>
@@ -91,7 +78,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR LOGIC (SECURITY UPDATE) ---
+# --- SIDEBAR LOGIC ---
 if 'user_role' not in st.session_state:
     st.session_state['user_role'] = "Guest" 
 if 'user_branch' not in st.session_state:
@@ -99,24 +86,17 @@ if 'user_branch' not in st.session_state:
 
 # LOGIKA MENU DINAMIS
 if st.session_state['user_role'] == "Guest":
-    # Guest HANYA bisa lihat Login dan Cek Resi
     menu_options = ["🔐 Login Staff", "🔍 Cek Resi (Public)"]
-
 elif st.session_state['user_role'] == "Sales":
-    # Sales: Input, Dashboard, Cek Resi
     menu_options = ["📝 Input Delivery Order", "📊 Dashboard Monitoring", "🔍 Cek Resi (Public)"]
-
 elif st.session_state['user_role'] == "SPV":
-    # SPV: Input, Update, Dashboard, Cek Resi
     menu_options = ["📝 Input Delivery Order", "⚙️ Update Status (SPV)", "📊 Dashboard Monitoring", "🔍 Cek Resi (Public)"]
-
 elif st.session_state['user_role'] == "Admin":
-    # Admin: Dashboard, Update, Hapus, Cek Resi
     menu_options = ["📊 Dashboard Monitoring", "⚙️ Update Status (Admin)", "🗑️ Hapus Data (Admin)", "🔍 Cek Resi (Public)"]
 
 menu = st.sidebar.radio("Menu Aplikasi", menu_options)
 
-# --- INFO USER & LOGOUT (Di Sidebar Bawah) ---
+# --- INFO USER & LOGOUT ---
 if st.session_state['user_role'] != "Guest":
     with st.sidebar:
         st.divider()
@@ -141,6 +121,7 @@ if menu == "🔐 Login Staff":
             st.divider()
             
             if login_type == "Sales Cabang":
+                # Mengambil daftar cabang dari keys di Secrets
                 cabang_list = list(SALES_CREDENTIALS.keys())
                 selected_cabang = st.selectbox("Pilih Cabang Anda:", cabang_list)
                 pw = st.text_input("Password Sales:", type="password")
@@ -330,7 +311,6 @@ elif menu == "📝 Input Delivery Order":
 # ==========================================
 elif menu == "🔍 Cek Resi (Public)":
     st.title("🔍 Cek Status Pengiriman")
-    st.markdown("Fitur ini dapat diakses oleh Staff dan Customer tanpa login.")
     query = st.text_input("Masukkan Order ID / Nama Customer:")
 
     if st.button("Lacak") or query:
