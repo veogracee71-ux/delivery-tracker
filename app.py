@@ -115,7 +115,7 @@ with st.sidebar:
 # ==========================================
 if menu == "🔐 Login Staff":
     st.title("🔐 Login Sistem Delivery Tracker")
-    st.info("ℹ️ Klik tanda panah (>) di pojok kiri atas untuk membuka menu lainnya.")
+    st.info("ℹ️ Klik tanda panah (>>) di pojok kiri atas untuk membuka menu lainnya.")
     st.markdown("Silakan login sesuai peran Anda untuk mengakses Dashboard Operasional.")
     
     col_login1, col_login2, col_login3 = st.columns([1, 2, 1])
