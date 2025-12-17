@@ -1,8 +1,7 @@
-# Versi 2.61 (Fix Final Tampilan Dashboard)
+# Versi 2.62 (Fix Warna Tombol)
 # Status: Stabil
-# Update: FIX FINAL BUG TAMPILAN WAKTU DASHBOARD. 
-# 1. Menggunakan formatting Pandas yang lebih defensif (menghilangkan mikrodetik) 
-#    agar kolom last_updated dan created_at tampil rapi di st.dataframe.
+# Update: FIX FINAL WARNA TOMBOL. Menambahkan kembali selector CSS untuk st.form_submit_button 
+#         agar tombol "Simpan" di menu Validasi SPV pasti berwarna Biru Blibli (#0095DA).
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -255,7 +254,7 @@ def process_admin_update(oid):
     except Exception as e:
         st.toast(f"Error: {e}", icon="❌")
 
-# --- CUSTOM CSS ---
+# --- CUSTOM CSS (FIX WARNA TOMBOL FORM) ---
 st.markdown("""
 <style>
     div.stButton > button { background-color: #0095DA !important; color: white !important; border: 1px solid #0095DA !important; font-weight: bold !important; }
@@ -263,6 +262,9 @@ st.markdown("""
     /* Menargetkan tombol di dalam container non-form */
     button[kind="primary"] { background-color: #0095DA !important; color: white !important; border: none !important; }
     [data-testid="stLinkButton"] > a { background-color: #0095DA !important; color: white !important; border: 1px solid #0095DA !important; font-weight: bold !important; }
+    /* FIX V2.62: Menargetkan tombol submit form agar berwarna biru Blibli */
+    div.stFormSubmitButton > button { background-color: #0095DA !important; color: white !important; border: none !important; }
+    [data-testid="stFormSubmitButton"] > button { background-color: #0095DA !important; color: white !important; border: none !important; } 
 </style>
 """, unsafe_allow_html=True)
 
@@ -291,7 +293,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.61 (Fix Tampilan Dashboard)**")
+    st.caption("🚀 **Versi 2.62 (Final Fix)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
