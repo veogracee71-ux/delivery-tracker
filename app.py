@@ -1,8 +1,8 @@
-# Versi 2.63 (Final Fix ID Extraction)
+# Versi 2.64 (Final Fix Kestabilan Dashboard)
 # Status: Stabil
-# Update: FIX BUG ID EXTRACTION. Menerapkan metode get() pada ekstraksi 'order_id' 
-#         di Dashboard agar lebih tangguh terhadap data yang tidak terstruktur atau kosong, 
-#         memecahkan error NameError/KeyError yang tidak terdeteksi.
+# Update: FIX BUG KEY ERROR. Mengubah logika filter status di Dashboard agar lebih defensif 
+#         (menggunakan .get() pada kolom 'status') untuk mencegah Key Error ('order_id' atau 'status') 
+#         saat memproses data mentah dari Supabase.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -294,7 +294,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.63 (Final Fix)**")
+    st.caption("🚀 **Versi 2.64 (Final Fix)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -426,13 +426,13 @@ elif menu == "📊 Dashboard Monitoring":
                 sel_br = st.selectbox("Filter Cabang:", br_list)
                 filtered = res.data if sel_br == "Semua Cabang" else [d for d in res.data if d.get('branch') == sel_br]
 
-            # --- METRICS & STATUS LOGIC ---
-            pending = [x for x in filtered if "selesai" not in x['status'].lower() and "dikirim" not in x['status'].lower() and "jalan" not in x['status'].lower() and "pengiriman" not in x['status'].lower()]
-            shipping = [x for x in filtered if "dikirim" in x['status'].lower() or "jalan" in x['status'].lower() or "pengiriman" in x['status'].lower()]
-            done = [x for x in filtered if "selesai" in x['status'].lower() or "diterima" in x['status'].lower()]
+            # --- METRICS & STATUS LOGIC (FIX V2.64: Menggunakan .get() untuk status) ---
+            pending = [x for x in filtered if "selesai" not in x.get('status', '').lower() and "dikirim" not in x.get('status', '').lower() and "jalan" not in x.get('status', '').lower() and "pengiriman" not in x.get('status', '').lower()]
+            shipping = [x for x in filtered if "dikirim" in x.get('status', '').lower() or "jalan" in x.get('status', '').lower() or "pengiriman" in x.get('status', '').lower()]
+            done = [x for x in filtered if "selesai" in x.get('status', '').lower() or "diterima" in x.get('status', '').lower()]
             
             # Badge Notifikasi
-            pending_confirmation = [x for x in filtered if x['status'].strip() == "Menunggu Konfirmasi"]
+            pending_confirmation = [x for x in filtered if x.get('status', '').strip() == "Menunggu Konfirmasi"]
             if pending_confirmation and st.session_state['user_role'] in ["SPV", "Admin"]:
                  st.error(f"🔔 PERHATIAN: Ada {len(pending_confirmation)} Order Baru Menunggu Konfirmasi!", icon="🔥")
 
@@ -442,7 +442,7 @@ elif menu == "📊 Dashboard Monitoring":
             c3.metric("✅ Selesai", f"{len(done)}")
             st.divider()
 
-            # --- FIX TAMPILAN DASHBOARD: FORMAT WAKTU & BATASI KOLOM ---
+            # --- TAMPILAN DASHBOARD: FORMAT WAKTU & BATASI KOLOM ---
             df_display_all = pd.DataFrame(filtered)
             
             # 1. Konversi dan Format Waktu agar rapi (DD/MM/YYYY HH:MM)
@@ -450,9 +450,7 @@ elif menu == "📊 Dashboard Monitoring":
             
             for col in ['last_updated', 'created_at']:
                 if col in df_display_all.columns:
-                    # Convert to datetime, then round down to seconds to remove microseconds, then format to string
                     df_display_all[col] = pd.to_datetime(df_display_all[col], errors='coerce').dt.floor('S').dt.strftime(date_format)
-                    # Replace NaN/NaT values which may occur if data is missing
                     df_display_all[col] = df_display_all[col].fillna('-')
 
             # 2. Tentukan Kolom Esensial
@@ -680,4 +678,4 @@ elif menu == "🗄️ Manajemen Data":
                         time.sleep(2)
                         st.rerun()
     else:
-        st.info("Belum ada data untuk dikelola.")    
+        st.info("Belum ada data untuk dikelola.")
