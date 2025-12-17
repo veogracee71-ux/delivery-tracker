@@ -1,7 +1,7 @@
-# Versi 2.43
+# Versi 2.44
 # Update:
-# 1. Menghapus Template Pesan (Copy Text) di menu Cek Resi.
-# 2. Mengganti label "WA" menjadi "HP" pada struk PDF (Data Sales).
+# 1. Mengubah label Tanda Tangan dari "Pengirim" menjadi "Sales".
+# 2. Memastikan posisi Judul "SURAT JALAN" benar-benar Center (sejajar dengan konten).
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -49,7 +49,7 @@ def get_status_color(status):
     elif "dikirim" in s or "jalan" in s: return "info"
     else: return "warning"
 
-# --- FUNGSI CETAK PDF (UPDATE 2.43 - WA jadi HP) ---
+# --- FUNGSI CETAK PDF (UPDATE 2.44) ---
 def create_thermal_pdf(data):
     def safe_text(text):
         if not text: return "-"
@@ -59,7 +59,7 @@ def create_thermal_pdf(data):
     pdf.add_page()
     margin = 4
     pdf.set_margins(margin, margin, margin)
-    w_full = 72
+    w_full = 72 # Lebar area cetak (80mm - 4mm - 4mm)
     
     def draw_line():
         pdf.ln(2)
@@ -67,9 +67,10 @@ def create_thermal_pdf(data):
         pdf.line(margin, y, margin + w_full, y)
         pdf.ln(2)
 
-    # 1. HEADER
+    # 1. HEADER (Center Fixed Width)
     pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, "SURAT JALAN", 0, 1, 'C')
+    # Menggunakan w_full agar center-nya konsisten dengan body
+    pdf.cell(w_full, 8, "SURAT JALAN", 0, 1, 'C')
     draw_line()
     
     # 2. INFO
@@ -95,13 +96,13 @@ def create_thermal_pdf(data):
     pdf.multi_cell(w_full, 5, safe_text(data['delivery_address']))
     draw_line()
     
-    # 4. SALES (Update: WA -> HP)
+    # 4. SALES
     pdf.set_font("Arial", 'B', 11)
     pdf.cell(w_full, 6, "SALES:", 0, 1)
     pdf.set_font("Arial", '', 10)
     pdf.cell(15, 5, "Nama", 0, 0)
     pdf.cell(57, 5, f": {safe_text(data['sales_name'])} ({safe_text(data['branch'])})", 0, 1)
-    pdf.cell(15, 5, "HP", 0, 0) # Ganti WA jadi HP
+    pdf.cell(15, 5, "HP", 0, 0)
     pdf.cell(57, 5, f": {safe_text(data.get('sales_phone', '-'))}", 0, 1)
     draw_line()
     
@@ -122,16 +123,20 @@ def create_thermal_pdf(data):
         pdf.cell(47, 5, f": Rp {safe_text(data.get('installation_fee', '-'))}", 0, 1)
     draw_line()
     
-    # 6. TTD
+    # 6. TTD (Update: Ganti Pengirim jadi Sales)
     pdf.ln(5)
     y_start = pdf.get_y()
-    col_w = 36
+    col_w = 36 # Setengah dari w_full (72/2)
+    
     pdf.set_font("Arial", '', 10)
     pdf.set_xy(margin, y_start)
-    pdf.cell(col_w, 5, "Pengirim,", 0, 0, 'C')
+    pdf.cell(col_w, 5, "Sales,", 0, 0, 'C') # Ganti Label
+    
     pdf.set_xy(margin + col_w, y_start)
     pdf.cell(col_w, 5, "Penerima,", 0, 1, 'C')
+    
     pdf.ln(20)
+    
     y_end = pdf.get_y()
     pdf.set_font("Arial", 'B', 10)
     pdf.set_xy(margin, y_end)
@@ -153,7 +158,7 @@ def create_thermal_pdf(data):
     
     pdf.ln(2)
     pdf.set_font("Arial", 'B', 10)
-    pdf.cell(0, 5, "SCAN UNTUK TRACKING", 0, 1, 'C')
+    pdf.cell(w_full, 5, "SCAN UNTUK TRACKING", 0, 1, 'C')
     
     return pdf.output(dest='S').encode('latin-1')
 
@@ -263,11 +268,11 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.43 (Beta)**")
+    st.caption("🚀 **Versi 2.44 (Beta)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
-# HALAMAN 1: CEK RESI (LANDING PAGE)
+# HALAMAN 1: CEK RESI
 # ==========================================
 if menu == "🔍 Cek Resi (Public)":
     st.title("🔍 Lacak Pengiriman")
@@ -308,14 +313,12 @@ if menu == "🔍 Cek Resi (Public)":
                         {install_info}
                         * 🕒 **Update:** {tgl[:16].replace('T',' ')}
                         """)
-                        
-                        # --- UPDATE 2.43: Template Pesan DIHAPUS ---
                         st.divider()
-                else: st.warning("Data tidak ditemukan. Mohon cek kembali Order ID Anda.")
+                else: st.warning("Data tidak ditemukan.")
             except: st.error("Terjadi kesalahan koneksi.")
 
 # ==========================================
-# HALAMAN 2: LOGIN (PROTECTED WITH GATEKEEPER)
+# HALAMAN 2: LOGIN
 # ==========================================
 elif menu == "🔐 Login Staff":
     st.title("🔐 Login Staff & Admin")
