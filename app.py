@@ -1,6 +1,7 @@
-# Versi 2.37
-# Update: Menambahkan "Security Gate" (Kode Akses Awal) di halaman Login Staff untuk proteksi ganda.
-# Kode Akses Default: "blibli"
+# Versi 2.38
+# Update:
+# 1. Menghapus KOTAK (Border) pada judul "SURAT JALAN" di PDF Struk.
+# 2. QR Code tetap berfungsi otomatis berdasarkan Order ID untuk tracking spesifik.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -32,12 +33,10 @@ try:
     ADMIN_PASSWORD = st.secrets["passwords"]["admin"]
     SALES_CREDENTIALS = st.secrets["passwords"]["sales"]
     SPV_CREDENTIALS = st.secrets["passwords"]["spv"]
-    # Coba ambil kode gatekeeper dari secrets, kalo gak ada pake default "blibli"
     GATEKEEPER_PASSWORD = st.secrets["passwords"].get("gatekeeper", "blibli")
 except:
-    # Fallback jika secrets belum diupdate
     GATEKEEPER_PASSWORD = "blibli"
-    if not 'supabase' in locals(): # Cek jika supabase gagal load
+    if not 'supabase' in locals():
         st.error("Secrets belum lengkap.")
         st.stop()
 
@@ -50,7 +49,7 @@ def get_status_color(status):
     elif "dikirim" in s or "jalan" in s: return "info"
     else: return "warning"
 
-# --- FUNGSI CETAK PDF ---
+# --- FUNGSI CETAK PDF (UPDATE 2.38) ---
 def create_thermal_pdf(data):
     def safe_text(text):
         if not text: return "-"
@@ -68,9 +67,10 @@ def create_thermal_pdf(data):
         pdf.line(margin, y, margin + w_full, y)
         pdf.ln(2)
 
-    # 1. HEADER
+    # 1. HEADER (Update: Tanpa Kotak)
     pdf.set_font("Arial", 'B', 14)
-    pdf.cell(w_full, 8, "SURAT JALAN", 1, 1, 'C')
+    # Border diubah dari 1 menjadi 0 (Tanpa Garis)
+    pdf.cell(w_full, 8, "SURAT JALAN", 0, 1, 'C')
     draw_line()
     
     # 2. INFO
@@ -243,7 +243,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.37 (Beta)**")
+    st.caption("🚀 **Versi 2.38 (Beta)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -317,9 +317,8 @@ elif menu == "🔐 Login Staff":
                     st.rerun()
                 else:
                     st.error("Kode Akses Salah.")
-        st.stop() # Berhenti disini jika belum unlocked
+        st.stop()
     
-    # --- FORM LOGIN ASLI (Hanya muncul jika Gate unlocked) ---
     st.success("Akses Terbuka. Silakan Login.")
     
     col1, col2, col3 = st.columns([1, 2, 1])
