@@ -1,8 +1,7 @@
-# Versi 2.73 (Role Optimization)
-# Status: Production Ready
-# Update: 
-# 1. Menghilangkan menu "Input Delivery Order" untuk role SPV dan Admin Pusat (Hanya Sales).
-# 2. Mempertahankan fitur v2.72: Fix UI Blank Validasi, Scroll Iframe BES, dan Separator Form.
+# Versi 2.63 (Final Fix ID Extraction)
+# Status: Stabil & Baseline Utama
+# Update: Mengembalikan seluruh fitur ke kondisi v2.63 yang stabil.
+#         Fix bug extraction 'order_id' agar Dashboard tidak crash.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -40,7 +39,7 @@ try:
 except:
     GATEKEEPER_PASSWORD = "blibli"
     if not 'supabase' in locals():
-        st.error("Secrets belum lengkap.")
+        st.error("Secrets belum lengkap di Streamlit Cloud.")
         st.stop()
 
 supabase: Client = create_client(url, key)
@@ -52,7 +51,7 @@ def get_status_color(status):
     elif "dikirim" in s or "jalan" in s or "pengiriman" in s: return "info"
     else: return "warning"
 
-# --- FUNGSI CETAK PDF ---
+# --- FUNGSI CETAK PDF (Thermal 80mm) ---
 def create_thermal_pdf(data, print_timestamp):
     def safe_text(text):
         if not text: return "-"
@@ -185,15 +184,12 @@ def process_sales_submit():
     in_inst = s.get("in_instalasi", "Tidak")
     in_fee = s.get("in_biaya_inst", "") if in_inst == "Ya - Vendor" else ""
     
+    # WIB Time
     TIME_OFFSET = timedelta(hours=7) 
     current_time_wib = datetime.utcnow() + TIME_OFFSET 
 
     if not (in_id and in_sales and in_nama and in_barang):
         st.session_state['sales_error'] = "⚠️ Data wajib belum lengkap (ID, Sales, Customer, Barang)."
-        return
-
-    if in_tipe == "Tukar Tambah" and not in_old_item:
-        st.session_state['sales_error'] = "⚠️ Anda memilih Tukar Tambah. Harap isi Detail Barang Lama!"
         return
 
     try:
@@ -215,6 +211,7 @@ def process_sales_submit():
         st.session_state['sales_pdf_data'] = b64_pdf
         st.session_state['sales_last_id'] = in_id
         
+        # Reset Data
         for k in ["in_id", "in_sales", "in_sales_hp", "in_nama", "in_hp", "in_alamat", "in_barang", "in_biaya_inst", "in_barang_lama"]:
             st.session_state[k] = ""
         st.session_state["in_tipe"] = "Reguler"
@@ -263,20 +260,17 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR LOGIC (ROLE OPTIMIZATION) ---
+# --- SIDEBAR LOGIC ---
 if 'user_role' not in st.session_state: st.session_state['user_role'] = "Guest" 
 if 'user_branch' not in st.session_state: st.session_state['user_branch'] = ""
 
 if st.session_state['user_role'] == "Guest":
     menu_options = ["🔍 Cek Resi (Public)", "🔐 Login Staff"] 
 elif st.session_state['user_role'] == "Sales":
-    # Sales bisa Input dan Monitoring
     menu_options = ["📊 Dashboard Monitoring", "📝 Input Delivery Order", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "SPV":
-    # SPV TIDAK BISA INPUT ORDER - Fokus Validasi & Manajemen
-    menu_options = ["📊 Dashboard Monitoring", "⚙️ Update Status (SPV)", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
+    menu_options = ["📊 Dashboard Monitoring", "📝 Input Delivery Order", "⚙️ Update Status (SPV)", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "Admin":
-    # ADMIN TIDAK BISA INPUT ORDER - Fokus Validasi & Manajemen
     menu_options = ["📊 Dashboard Monitoring", "⚙️ Update Status (Admin)", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
 
 menu = st.sidebar.radio("Menu Aplikasi", menu_options)
@@ -291,7 +285,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.73 (Role Optimized)**")
+    st.caption("🚀 **Versi 2.63 (Final Fix ID)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -374,20 +368,16 @@ elif menu == "📊 Dashboard Monitoring":
     st.title("📊 Monitoring Operasional")
     try:
         res = supabase.table("shipments").select("*").execute()
-        raw_data = res.data if res.data else []
-        
-        if st.session_state['user_role'] in ["Sales", "SPV"]:
-            branch = st.session_state['user_branch']
-            filtered = [d for d in raw_data if d.get('branch') == branch]
-        else:
-            br_list = sorted(list(set([d['branch'] for d in raw_data if d.get('branch')])))
-            br_list.insert(0, "Semua Cabang")
-            sel_br = st.selectbox("Filter Cabang:", br_list)
-            filtered = raw_data if sel_br == "Semua Cabang" else [d for d in raw_data if d.get('branch') == sel_br]
+        if res.data:
+            if st.session_state['user_role'] in ["Sales", "SPV"]:
+                branch = st.session_state['user_branch']
+                filtered = [d for d in res.data if d.get('branch') == branch]
+            else:
+                br_list = sorted(list(set([d['branch'] for d in res.data if d.get('branch')])))
+                br_list.insert(0, "Semua Cabang")
+                sel_br = st.selectbox("Filter Cabang:", br_list)
+                filtered = res.data if sel_br == "Semua Cabang" else [d for d in res.data if d.get('branch') == sel_br]
 
-        if not filtered:
-            st.info("📍 Belum ada data pengiriman untuk cabang ini.")
-        else:
             pending = [x for x in filtered if "selesai" not in str(x.get('status','')).lower() and "dikirim" not in str(x.get('status','')).lower() and "jalan" not in str(x.get('status','')).lower()]
             shipping = [x for x in filtered if "dikirim" in str(x.get('status','')).lower() or "jalan" in str(x.get('status','')).lower()]
             done = [x for x in filtered if "selesai" in str(x.get('status','')).lower() or "diterima" in str(x.get('status','')).lower()]
@@ -407,33 +397,26 @@ elif menu == "📊 Dashboard Monitoring":
                         df_all[col] = pd.to_datetime(df_all[col], errors='coerce').dt.floor('S').dt.strftime('%d/%m/%Y %H:%M')
                         df_all[col] = df_all[col].fillna('-')
 
-                disp_cols = ['order_id', 'customer_name', 'product_name', 'status', 'last_updated', 'delivery_type']
+                disp_cols = ['order_id', 'customer_name', 'product_name', 'status', 'last_updated']
                 if st.session_state['user_role'] == "Admin": disp_cols.insert(3, 'branch')
                 
-                final_cols = [c for c in disp_cols if c in df_all.columns]
-                
-                with st.expander(f"📦 Diproses ({len(pending)})"):
-                    p_ids = [d.get('order_id') for d in pending]
-                    st.dataframe(df_all[df_all['order_id'].isin(p_ids)][final_cols], use_container_width=True)
-                with st.expander(f"🚚 Sedang Jalan ({len(shipping)})"):
-                    s_ids = [d.get('order_id') for d in shipping]
-                    st.dataframe(df_all[df_all['order_id'].isin(s_ids)][final_cols], use_container_width=True)
-                with st.expander(f"✅ Selesai ({len(done)})"):
-                    d_ids = [d.get('order_id') for d in done]
-                    st.dataframe(df_all[df_all['order_id'].isin(d_ids)][final_cols], use_container_width=True)
-            else:
-                st.warning("Struktur data tidak valid.")
-    except Exception as e: st.error(f"Terjadi kesalahan: {e}")
+                final_cols = [col for col in disp_cols if col in df_all.columns]
+
+                # FIX V2.63 Logic
+                pending_ids = [d.get('order_id') for d in pending if d.get('order_id')]
+                shipping_ids = [d.get('order_id') for d in shipping if d.get('order_id')]
+                done_ids = [d.get('order_id') for d in done if d.get('order_id')]
+
+                with st.expander(f"📦 Diproses ({len(pending)})"): st.dataframe(df_all[df_all['order_id'].isin(pending_ids)][final_cols], use_container_width=True)
+                with st.expander(f"🚚 Sedang Jalan ({len(shipping)})"): st.dataframe(df_all[df_all['order_id'].isin(shipping_ids)][final_cols], use_container_width=True)
+                with st.expander(f"✅ Selesai ({len(done)})"): st.dataframe(df_all[df_all['order_id'].isin(done_ids)][final_cols], use_container_width=True)
+        else: st.info("Data kosong.")
+    except Exception as e: st.error(str(e))
 
 # ==========================================
-# HALAMAN 4: INPUT ORDER (HANYA SALES)
+# HALAMAN 4: INPUT ORDER
 # ==========================================
 elif menu == "📝 Input Delivery Order":
-    # Proteksi tambahan jika user mencoba akses manual
-    if st.session_state['user_role'] not in ["Sales"]:
-        st.error("⛔ Akses Ditolak. Menu ini hanya untuk staf Sales Cabang.")
-        st.stop()
-
     st.title("📝 Input Delivery Order")
     if st.session_state.get('sales_success'):
         st.success(f"✅ Order {st.session_state.get('sales_last_id')} Berhasil!")
@@ -444,35 +427,14 @@ elif menu == "📝 Input Delivery Order":
     if not st.session_state.get('sales_success'):
         if st.session_state.get('sales_error'): st.error(st.session_state['sales_error'])
         with st.container(border=True):
-            # --- PEMISAH 1: SALES & ORDER ---
-            st.subheader("1. Data Sales & Order")
-            st.text_input("Order ID / Nomor Invoice (Wajib)", key="in_id")
-            c1, c2 = st.columns(2)
-            c1.text_input("Nama Sales Penginput", key="in_sales")
-            c2.text_input("No WhatsApp Sales", key="in_sales_hp")
-            st.divider()
-
-            # --- PEMISAH 2: CUSTOMER ---
-            st.subheader("2. Data Pelanggan")
-            c3, c4 = st.columns(2)
-            c3.text_input("Nama Lengkap Customer", key="in_nama")
-            c4.text_input("No HP Customer", key="in_hp")
-            st.text_area("Alamat Pengiriman Lengkap", key="in_alamat")
-            st.divider()
-
-            # --- PEMISAH 3: BARANG ---
-            st.subheader("3. Detail Barang & Layanan")
-            c5, c6 = st.columns(2)
-            c5.text_input("Nama Barang / Produk", key="in_barang")
-            sel_tipe = st.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"], key="in_tipe")
-            if sel_tipe == "Tukar Tambah": 
-                st.info("🔄 Mode Tukar Tambah Aktif")
-                st.text_input("Detail Barang Lama (Wajib)", key="in_barang_lama", placeholder="Merk, Tipe, Kondisi...")
-            sel_inst = st.selectbox("Opsi Instalasi?", ["Tidak", "Ya - Vendor"], key="in_instalasi")
-            if sel_inst == "Ya - Vendor": 
-                st.info("🔧 Mode Instalasi Vendor Aktif")
-                st.text_input("Biaya Transport / Instalasi (Rp)", key="in_biaya_inst")
-            st.divider()
+            st.text_input("Order ID (Wajib)", key="in_id")
+            c1, c2 = st.columns(2); c1.text_input("Nama Sales", key="in_sales"); c2.text_input("No WA Sales", key="in_sales_hp")
+            c3, c4 = st.columns(2); c3.text_input("Nama Customer", key="in_nama"); c4.text_input("No HP Customer", key="in_hp")
+            st.text_area("Alamat Pengiriman", key="in_alamat")
+            c5, c6 = st.columns(2); st.text_input("Nama Barang", key="in_barang"); sel_tipe = st.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"], key="in_tipe")
+            if sel_tipe == "Tukar Tambah": st.text_input("Detail Barang Lama (Wajib)", key="in_barang_lama")
+            sel_inst = st.selectbox("Instalasi?", ["Tidak", "Ya - Vendor"], key="in_instalasi")
+            if sel_inst == "Ya - Vendor": st.text_input("Biaya Transport (Rp)", key="in_biaya_inst")
             st.button("Kirim ke Gudang", type="primary", on_click=process_sales_submit)
 
 # ==========================================
@@ -483,29 +445,22 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
     q = supabase.table("shipments").select("*").order("created_at", desc=True).limit(50)
     if st.session_state['user_role'] == "SPV": q = q.eq("branch", st.session_state['user_branch'])
     res = q.execute()
-    
     if res.data:
         opts = {f"[{d['status']}] {d['order_id']} - {d['customer_name']}": d for d in res.data}
         sel = st.selectbox("Pilih Order:", list(opts.keys()), index=None, key="upd_sel")
         if sel:
             curr = opts[sel]; oid = curr['order_id']
-            with st.expander("🌍 Tracking Website PT. BES"): 
-                st.caption("Gunakan area di bawah ini untuk melacak resi PT. BES secara langsung.")
-                components.iframe("https://www.bes-paket.com/track-package", height=500, scrolling=True)
-            
+            with st.expander("Tracking BES"): components.iframe("https://www.bes-paket.com/track-package", height=400)
             with st.form("upd_form"):
                 sts = ["Menunggu Konfirmasi", "Diproses Gudang", "Menunggu Kurir", "Dalam Pengiriman", "Selesai/Diterima"]
                 st.selectbox("Status", sts, index=sts.index(curr['status']) if curr['status'] in sts else 0, key=f"stat_{oid}")
-                st.text_input("Nama Kurir / Ekspedisi", value=curr['courier'] or "", key=f"kur_{oid}")
-                st.text_input("No Resi / Plat Nomor", value=curr['resi'] or "", key=f"res_{oid}")
-                st.divider(); st.date_input("Tanggal Fakta Lapangan", value=date.today(), key=f"date_{oid}"); st.time_input("Jam Fakta Lapangan", value=datetime.now().time(), key=f"time_{oid}")
+                st.text_input("Kurir", value=curr['courier'] or "", key=f"kur_{oid}"); st.text_input("Resi", value=curr['resi'] or "", key=f"res_{oid}")
+                st.divider(); st.date_input("Tanggal Fakta", value=date.today(), key=f"date_{oid}"); st.time_input("Jam Fakta", value=datetime.now().time(), key=f"time_{oid}")
                 st.divider()
-                st.caption("Koreksi Data (Jika Ada Salah Input):")
                 st.text_input("Nama Customer", value=curr['customer_name'], key=f"cnama_{oid}")
                 st.text_input("Nama Barang", value=curr['product_name'], key=f"cbar_{oid}")
-                st.form_submit_button("Simpan Perubahan", on_click=process_admin_update, args=(oid,))
-    else:
-        st.info("📍 Belum ada order baru yang masuk untuk divalidasi di cabang ini.")
+                st.form_submit_button("Simpan", on_click=process_admin_update, args=(oid,))
+    else: st.info("Data kosong.")
 
 # ==========================================
 # HALAMAN 6: MANAJEMEN DATA
