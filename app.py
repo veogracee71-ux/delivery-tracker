@@ -1282,3 +1282,120 @@ elif current_page == "data":
                     "📥 Download File Excel",
                     output.getvalue(),
                     file_name=
+# ... (Sambungan dari kode sebelumnya di bagian elif current_page == "data":)
+
+elif current_page == "data":
+    user_role = st.session_state['user_role']
+    user_branch = st.session_state['user_branch']
+    render_header("Manajemen Data", "Download, hapus, dan kelola data pengiriman")
+    
+    if not supabase:
+        st.warning("⚠️ Database tidak terhubung (Demo Mode)")
+        st.stop()
+    
+    try:
+        res = supabase.table("shipments").select("*").execute()
+        all_data = res.data if res.data else []
+        
+        # Filter data jika user adalah SPV
+        if user_role == "SPV":
+            all_data = [d for d in all_data if d.get('branch') == user_branch]
+        
+        if all_data:
+            df = pd.DataFrame(all_data)
+            
+            # Tabs Menu
+            tab1, tab2, tab3 = st.tabs(["📥 Download Excel", "🗑️ Hapus Order", "🔥 Reset Database"])
+            
+            # --- TAB 1: DOWNLOAD EXCEL ---
+            with tab1:
+                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+                st.markdown("#### 📊 Export Data ke Excel")
+                st.markdown(f"Total data: **{len(all_data)}** order")
+                
+                # Format tanggal agar rapi di Excel
+                df_export = df.copy()
+                for col in ['created_at', 'last_updated']:
+                    if col in df_export.columns:
+                        df_export[col] = pd.to_datetime(df_export[col], errors='coerce').dt.strftime('%d/%m/%Y %H:%M')
+                
+                # Proses pembuatan file Excel di memori
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    df_export.to_excel(writer, index=False, sheet_name='Laporan')
+                    wb = writer.book
+                    ws = writer.sheets['Laporan']
+                    # Styling Header Excel
+                    fmt = wb.add_format({'bold': True, 'fg_color': '#0095DA', 'font_color': '#FFFFFF', 'border': 1})
+                    for i, v in enumerate(df_export.columns.values):
+                        ws.write(0, i, v, fmt)
+                        ws.set_column(i, i, 20)
+                
+                st.download_button(
+                    label="📥 Download File Excel",
+                    data=output.getvalue(),
+                    file_name=f"Laporan_Delivery_{date.today()}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            # --- TAB 2: HAPUS ORDER ---
+            with tab2:
+                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+                st.markdown("#### 🗑️ Hapus Order Satuan")
+                st.warning("Data yang dihapus tidak dapat dikembalikan.")
+                
+                del_opts = {f"{d['order_id']} - {d['customer_name']}": d['order_id'] for d in all_data}
+                d_sel = st.selectbox("Pilih Order untuk Dihapus:", list(del_opts.keys()), index=None)
+                
+                if d_sel:
+                    st.markdown(f"Anda akan menghapus order ID: **{del_opts[d_sel]}**")
+                    if st.button("🗑️ Hapus Permanen", type="primary"): 
+                        try:
+                            supabase.table("shipments").delete().eq("order_id", del_opts[d_sel]).execute()
+                            st.toast("Data berhasil dihapus!", icon="✅")
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Gagal menghapus: {e}")
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            # --- TAB 3: RESET DATABASE (ADMIN ONLY) ---
+            with tab3:
+                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+                st.markdown("#### 🔥 Reset Database")
+                
+                if user_role == "Admin":
+                    st.markdown("""
+                    <div class="alert-box alert-danger">
+                        <span style="font-size: 1.5rem;">⚠️</span>
+                        <div>
+                            <strong>BAHAYA!</strong><br>
+                            Tindakan ini akan menghapus <strong>SEMUA DATA</strong> pengiriman di database.
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    confirm_text = st.text_input("Ketik 'HAPUS SEMUA' untuk konfirmasi:", placeholder="Ketik disini...")
+                    
+                    if confirm_text == "HAPUS SEMUA":
+                        if st.button("🔥 YA, RESET DATABASE SEKARANG", type="primary"): 
+                            try:
+                                supabase.table("shipments").delete().neq("id", 0).execute()
+                                st.success("Database berhasil di-reset bersih!")
+                                time.sleep(2)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+                else:
+                    st.warning("⛔ Akses Ditolak. Menu ini khusus Admin Pusat.")
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+        else:
+            st.info("📭 Data Kosong. Belum ada pengiriman yang tercatat.")
+            
+    except Exception as e:
+        st.error(f"Terjadi kesalahan saat memuat data: {e}")
+
+# End of File
