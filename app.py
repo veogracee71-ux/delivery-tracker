@@ -1,4 +1,4 @@
-# Versi 3.0 (Modern UI/UX Edition)
+# Versi 3.0 (Modern UI/UX Edition) - FIXED
 # Status: Production Ready
 # Update: Complete UI/UX overhaul dengan navigasi modern
 
@@ -15,8 +15,14 @@ import tempfile
 import os
 import pandas as pd
 import io 
-import plotly.express as px
-import plotly.graph_objects as go
+
+# Optional: Plotly untuk charts (install dengan: pip install plotly)
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(
@@ -37,19 +43,12 @@ try:
     SALES_CREDENTIALS = st.secrets["passwords"]["sales"]
     SPV_CREDENTIALS = st.secrets["passwords"]["spv"]
     GATEKEEPER_PASSWORD = st.secrets["passwords"].get("gatekeeper", "blibli")
-except:
+    supabase: Client = create_client(url, key)
+except Exception as e:
     GATEKEEPER_PASSWORD = "blibli"
-    # Demo mode untuk development
-    url = ""
-    key = ""
     ADMIN_PASSWORD = "admin123"
     SALES_CREDENTIALS = {"Jakarta": "jkt123", "Bandung": "bdg123"}
     SPV_CREDENTIALS = {"Jakarta": "spvjkt", "Bandung": "spvbdg"}
-
-# --- INISIALISASI SUPABASE ---
-if url and key:
-    supabase: Client = create_client(url, key)
-else:
     supabase = None
 
 # =============================================
@@ -91,58 +90,16 @@ st.markdown("""
     }
     
     .brand-header h1 {
-        color: white;
+        color: white !important;
         margin: 0;
         font-size: 1.8rem;
         font-weight: 700;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
     }
     
     .brand-header p {
         color: rgba(255,255,255,0.85);
         margin: 0.5rem 0 0 0;
         font-size: 0.95rem;
-    }
-    
-    /* ===== NAVIGATION PILLS ===== */
-    .nav-container {
-        display: flex;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-        margin-bottom: 1.5rem;
-        padding: 1rem;
-        background: white;
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow);
-    }
-    
-    .nav-pill {
-        padding: 0.75rem 1.25rem;
-        border-radius: 50px;
-        background: var(--light);
-        color: var(--dark);
-        text-decoration: none;
-        font-weight: 500;
-        font-size: 0.9rem;
-        transition: all 0.3s ease;
-        border: 2px solid transparent;
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    
-    .nav-pill:hover {
-        background: var(--primary-light);
-        color: var(--primary);
-    }
-    
-    .nav-pill.active {
-        background: var(--primary);
-        color: white;
-        box-shadow: 0 4px 12px rgba(0, 149, 218, 0.4);
     }
     
     /* ===== STAT CARDS ===== */
@@ -179,11 +136,6 @@ st.markdown("""
         font-weight: 500;
     }
     
-    .stat-icon {
-        font-size: 2rem;
-        opacity: 0.8;
-    }
-    
     /* ===== STATUS BADGES ===== */
     .status-badge {
         display: inline-flex;
@@ -195,26 +147,10 @@ st.markdown("""
         font-weight: 600;
     }
     
-    .status-pending {
-        background: #FEF3C7;
-        color: #92400E;
-    }
-    
-    .status-shipping {
-        background: #DBEAFE;
-        color: #1E40AF;
-    }
-    
-    .status-done {
-        background: #D1FAE5;
-        color: #065F46;
-    }
-    
-    .status-new {
-        background: #FEE2E2;
-        color: #991B1B;
-        animation: pulse 2s infinite;
-    }
+    .status-pending { background: #FEF3C7; color: #92400E; }
+    .status-shipping { background: #DBEAFE; color: #1E40AF; }
+    .status-done { background: #D1FAE5; color: #065F46; }
+    .status-new { background: #FEE2E2; color: #991B1B; animation: pulse 2s infinite; }
     
     @keyframes pulse {
         0%, 100% { opacity: 1; }
@@ -230,31 +166,12 @@ st.markdown("""
         margin-bottom: 1rem;
     }
     
-    .modern-card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 1rem;
-        padding-bottom: 1rem;
-        border-bottom: 1px solid #E5E7EB;
-    }
-    
-    .modern-card-title {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: var(--dark);
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    
     /* ===== FORM STYLING ===== */
     .stTextInput > div > div > input,
     .stTextArea > div > div > textarea,
     .stSelectbox > div > div > div {
         border-radius: 8px !important;
         border: 2px solid #E5E7EB !important;
-        transition: border-color 0.3s ease !important;
     }
     
     .stTextInput > div > div > input:focus,
@@ -271,7 +188,6 @@ st.markdown("""
         border-radius: 8px !important;
         padding: 0.6rem 1.5rem !important;
         font-weight: 600 !important;
-        transition: all 0.3s ease !important;
         box-shadow: 0 4px 12px rgba(0, 149, 218, 0.3) !important;
     }
     
@@ -290,12 +206,9 @@ st.markdown("""
         background: linear-gradient(180deg, #1F2937 0%, #111827 100%);
     }
     
-    [data-testid="stSidebar"] .stRadio > label {
-        color: white !important;
-    }
-    
+    [data-testid="stSidebar"] .stRadio > label,
     [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
-        color: rgba(255,255,255,0.8);
+        color: rgba(255,255,255,0.8) !important;
     }
     
     .sidebar-logo {
@@ -311,34 +224,6 @@ st.markdown("""
         margin: 0.5rem 0 0 0;
     }
     
-    .sidebar-menu-item {
-        padding: 0.8rem 1rem;
-        margin: 0.3rem 0;
-        border-radius: 8px;
-        color: rgba(255,255,255,0.8);
-        cursor: pointer;
-        transition: all 0.3s ease;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-    
-    .sidebar-menu-item:hover {
-        background: rgba(255,255,255,0.1);
-        color: white;
-    }
-    
-    .sidebar-menu-item.active {
-        background: var(--primary);
-        color: white;
-    }
-    
-    /* ===== TABLE STYLING ===== */
-    .dataframe {
-        border-radius: var(--border-radius) !important;
-        overflow: hidden;
-    }
-    
     /* ===== ALERT BOXES ===== */
     .alert-box {
         padding: 1rem 1.25rem;
@@ -349,29 +234,10 @@ st.markdown("""
         gap: 0.75rem;
     }
     
-    .alert-warning {
-        background: #FEF3C7;
-        border: 1px solid #F59E0B;
-        color: #92400E;
-    }
-    
-    .alert-success {
-        background: #D1FAE5;
-        border: 1px solid #10B981;
-        color: #065F46;
-    }
-    
-    .alert-danger {
-        background: #FEE2E2;
-        border: 1px solid #EF4444;
-        color: #991B1B;
-    }
-    
-    .alert-info {
-        background: #DBEAFE;
-        border: 1px solid #3B82F6;
-        color: #1E40AF;
-    }
+    .alert-warning { background: #FEF3C7; border: 1px solid #F59E0B; color: #92400E; }
+    .alert-success { background: #D1FAE5; border: 1px solid #10B981; color: #065F46; }
+    .alert-danger { background: #FEE2E2; border: 1px solid #EF4444; color: #991B1B; }
+    .alert-info { background: #DBEAFE; border: 1px solid #3B82F6; color: #1E40AF; }
     
     /* ===== PROGRESS TRACKER ===== */
     .progress-tracker {
@@ -412,111 +278,14 @@ st.markdown("""
         margin-bottom: 0.5rem;
     }
     
-    .progress-step.active .progress-step-icon {
-        background: var(--primary);
-        color: white;
-    }
-    
-    .progress-step.completed .progress-step-icon {
-        background: var(--success);
-        color: white;
-    }
+    .progress-step.active .progress-step-icon { background: var(--primary); color: white; }
+    .progress-step.completed .progress-step-icon { background: var(--success); color: white; }
     
     .progress-step-label {
         font-size: 0.75rem;
         color: var(--gray);
         text-align: center;
         max-width: 80px;
-    }
-    
-    /* ===== TIMELINE ===== */
-    .timeline {
-        position: relative;
-        padding-left: 2rem;
-    }
-    
-    .timeline::before {
-        content: '';
-        position: absolute;
-        left: 8px;
-        top: 0;
-        bottom: 0;
-        width: 2px;
-        background: #E5E7EB;
-    }
-    
-    .timeline-item {
-        position: relative;
-        padding-bottom: 1.5rem;
-    }
-    
-    .timeline-item::before {
-        content: '';
-        position: absolute;
-        left: -1.5rem;
-        top: 4px;
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        background: var(--primary);
-        border: 2px solid white;
-        box-shadow: 0 0 0 2px var(--primary);
-    }
-    
-    .timeline-item.completed::before {
-        background: var(--success);
-        box-shadow: 0 0 0 2px var(--success);
-    }
-    
-    /* ===== ANIMATIONS ===== */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .animate-fade-in {
-        animation: fadeIn 0.5s ease forwards;
-    }
-    
-    /* ===== RESPONSIVE ===== */
-    @media (max-width: 768px) {
-        .stat-card {
-            padding: 1rem;
-        }
-        .stat-number {
-            font-size: 1.8rem;
-        }
-        .brand-header h1 {
-            font-size: 1.4rem;
-        }
-    }
-    
-    /* ===== QUICK ACTION BUTTONS ===== */
-    .quick-actions {
-        display: flex;
-        gap: 0.75rem;
-        flex-wrap: wrap;
-        margin: 1rem 0;
-    }
-    
-    .quick-action-btn {
-        padding: 0.75rem 1.25rem;
-        border-radius: 8px;
-        background: white;
-        border: 2px solid #E5E7EB;
-        color: var(--dark);
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    
-    .quick-action-btn:hover {
-        border-color: var(--primary);
-        color: var(--primary);
-        background: var(--primary-light);
     }
     
     /* ===== EMPTY STATE ===== */
@@ -532,28 +301,19 @@ st.markdown("""
         opacity: 0.5;
     }
     
-    /* ===== FLOATING ACTION BUTTON ===== */
-    .fab {
-        position: fixed;
-        bottom: 2rem;
-        right: 2rem;
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.5rem;
-        box-shadow: 0 6px 20px rgba(0, 149, 218, 0.4);
-        cursor: pointer;
-        transition: all 0.3s ease;
-        z-index: 1000;
+    /* ===== ANIMATIONS ===== */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
     }
     
-    .fab:hover {
-        transform: scale(1.1);
+    .animate-fade-in { animation: fadeIn 0.5s ease forwards; }
+    
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+        .stat-card { padding: 1rem; }
+        .stat-number { font-size: 1.8rem; }
+        .brand-header h1 { font-size: 1.4rem; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -563,7 +323,6 @@ st.markdown("""
 # =============================================
 
 def get_status_color(status):
-    """Return status color class"""
     s = str(status).lower()
     if "selesai" in s or "diterima" in s: 
         return "success"
@@ -571,11 +330,9 @@ def get_status_color(status):
         return "info"
     elif "konfirmasi" in s:
         return "danger"
-    else: 
-        return "warning"
+    return "warning"
 
 def get_status_badge(status):
-    """Return HTML for status badge"""
     s = str(status).lower()
     if "selesai" in s or "diterima" in s:
         return f'<span class="status-badge status-done">✅ {status}</span>'
@@ -583,11 +340,9 @@ def get_status_badge(status):
         return f'<span class="status-badge status-shipping">🚚 {status}</span>'
     elif "konfirmasi" in s:
         return f'<span class="status-badge status-new">🔔 {status}</span>'
-    else:
-        return f'<span class="status-badge status-pending">⏳ {status}</span>'
+    return f'<span class="status-badge status-pending">⏳ {status}</span>'
 
 def render_stat_card(icon, number, label, color="primary"):
-    """Render a beautiful stat card"""
     return f"""
     <div class="stat-card {color}">
         <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -595,13 +350,12 @@ def render_stat_card(icon, number, label, color="primary"):
                 <div class="stat-number">{number}</div>
                 <div class="stat-label">{label}</div>
             </div>
-            <div class="stat-icon">{icon}</div>
+            <div style="font-size: 2rem; opacity: 0.8;">{icon}</div>
         </div>
     </div>
     """
 
 def render_header(title, subtitle=""):
-    """Render branded header"""
     st.markdown(f"""
     <div class="brand-header">
         <h1>📦 {title}</h1>
@@ -610,7 +364,6 @@ def render_header(title, subtitle=""):
     """, unsafe_allow_html=True)
 
 def render_progress_tracker(current_status):
-    """Render visual progress tracker"""
     steps = [
         ("📝", "Order Dibuat"),
         ("✅", "Dikonfirmasi"),
@@ -645,10 +398,9 @@ def render_progress_tracker(current_status):
         </div>
         """
     html += '</div>'
-    
     return html
 
-# --- FUNGSI CETAK PDF (sama seperti sebelumnya) ---
+# --- FUNGSI CETAK PDF ---
 def create_thermal_pdf(data, print_timestamp):
     def safe_text(text):
         if not text: return "-"
@@ -719,7 +471,7 @@ def create_thermal_pdf(data, print_timestamp):
 
     if data.get('installation_opt') == "Ya - Vendor":
         pdf.cell(25, 5, "Instalasi", 0, 0)
-        pdf.cell(47, 5, f": YA (Vendor)", 0, 1)
+        pdf.cell(47, 5, ": YA (Vendor)", 0, 1)
         pdf.cell(25, 5, "Biaya", 0, 0)
         pdf.cell(47, 5, f": Rp {safe_text(data.get('installation_fee', '-'))}", 0, 1)
     draw_line()
@@ -764,10 +516,14 @@ def process_sales_submit():
     st.session_state['sales_error'] = None
     s = st.session_state
     
-    in_id, in_sales = s.get("in_id", ""), s.get("in_sales", "")
-    in_sales_hp, in_nama = s.get("in_sales_hp", ""), s.get("in_nama", "")
-    in_hp, in_alamat = s.get("in_hp", ""), s.get("in_alamat", "")
-    in_barang, in_tipe = s.get("in_barang", ""), s.get("in_tipe", "Reguler")
+    in_id = s.get("in_id", "")
+    in_sales = s.get("in_sales", "")
+    in_sales_hp = s.get("in_sales_hp", "")
+    in_nama = s.get("in_nama", "")
+    in_hp = s.get("in_hp", "")
+    in_alamat = s.get("in_alamat", "")
+    in_barang = s.get("in_barang", "")
+    in_tipe = s.get("in_tipe", "Reguler")
     branch = s.get("user_branch", "")
     
     in_old_item = s.get("in_barang_lama", "") if in_tipe == "Tukar Tambah" else ""
@@ -787,12 +543,19 @@ def process_sales_submit():
 
     try:
         payload = {
-            "order_id": in_id, "customer_name": in_nama, "customer_phone": in_hp,
-            "delivery_address": in_alamat, "product_name": in_barang, "delivery_type": in_tipe,
-            "sales_name": in_sales, "sales_phone": in_sales_hp, "branch": branch,
+            "order_id": in_id, 
+            "customer_name": in_nama, 
+            "customer_phone": in_hp,
+            "delivery_address": in_alamat, 
+            "product_name": in_barang, 
+            "delivery_type": in_tipe,
+            "sales_name": in_sales, 
+            "sales_phone": in_sales_hp, 
+            "branch": branch,
             "status": "Menunggu Konfirmasi", 
             "last_updated": current_time_wib.isoformat(),
-            "installation_opt": in_inst, "installation_fee": in_fee,
+            "installation_opt": in_inst, 
+            "installation_fee": in_fee,
             "old_product_name": in_old_item
         }
         supabase.table("shipments").insert(payload).execute()
@@ -812,7 +575,7 @@ def process_sales_submit():
     except Exception as e:
         err_msg = str(e)
         if "duplicate key" in err_msg:
-            st.session_state['sales_error'] = f"Order ID **{in_id}** sudah ada."
+            st.session_state['sales_error'] = f"Order ID {in_id} sudah ada."
         else:
             st.session_state['sales_error'] = f"Error: {err_msg}"
 
@@ -829,8 +592,12 @@ def process_admin_update(oid):
     final_dt = datetime.combine(d_date, d_time).isoformat()
     
     upd = {
-        "status": new_stat, "courier": new_kurir, "resi": new_resi,
-        "last_updated": final_dt, "customer_name": corr_nama, "product_name": corr_barang
+        "status": new_stat, 
+        "courier": new_kurir, 
+        "resi": new_resi,
+        "last_updated": final_dt, 
+        "customer_name": corr_nama, 
+        "product_name": corr_barang
     }
     
     try:
@@ -867,19 +634,22 @@ with st.sidebar:
     
     # User Info Card
     if st.session_state['user_role'] != "Guest":
+        user_role = st.session_state['user_role']
+        user_branch = st.session_state['user_branch']
         role_colors = {"Admin": "#EF4444", "SPV": "#F59E0B", "Sales": "#10B981"}
-        role_color = role_colors.get(st.session_state['user_role'], "#6B7280")
+        role_color = role_colors.get(user_role, "#6B7280")
+        role_initial = user_role,[object Object], if user_role else "U"
         
         st.markdown(f"""
         <div style="background: rgba(255,255,255,0.1); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
             <div style="display: flex; align-items: center; gap: 0.75rem;">
                 <div style="width: 40px; height: 40px; border-radius: 50%; background: {role_color}; 
                             display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">
-                    {st.session_state['user_role'],[object Object],}
+                    {role_initial}
                 </div>
                 <div>
-                    <div style="color: white; font-weight: 600;">{st.session_state['user_role']}</div>
-                    <div style="color: rgba(255,255,255,0.6); font-size: 0.8rem;">{st.session_state['user_branch']}</div>
+                    <div style="color: white; font-weight: 600;">{user_role}</div>
+                    <div style="color: rgba(255,255,255,0.6); font-size: 0.8rem;">{user_branch}</div>
                 </div>
             </div>
         </div>
@@ -889,18 +659,19 @@ with st.sidebar:
     st.markdown('<p style="color: rgba(255,255,255,0.5); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">Menu Utama</p>', unsafe_allow_html=True)
     
     # Define menu based on role
-    if st.session_state['user_role'] == "Guest":
+    user_role = st.session_state['user_role']
+    if user_role == "Guest":
         menu_items = [
             ("🔍", "Lacak Paket", "tracking"),
             ("🔐", "Login Staff", "login")
         ]
-    elif st.session_state['user_role'] == "Sales":
+    elif user_role == "Sales":
         menu_items = [
             ("📊", "Dashboard", "dashboard"),
             ("📝", "Input Order", "input"),
             ("🔍", "Lacak Paket", "tracking")
         ]
-    elif st.session_state['user_role'] == "SPV":
+    elif user_role == "SPV":
         menu_items = [
             ("📊", "Dashboard", "dashboard"),
             ("📝", "Input Order", "input"),
@@ -908,16 +679,17 @@ with st.sidebar:
             ("🗄️", "Manajemen Data", "data"),
             ("🔍", "Lacak Paket", "tracking")
         ]
-    elif st.session_state['user_role'] == "Admin":
+    elif user_role == "Admin":
         menu_items = [
             ("📊", "Dashboard", "dashboard"),
             ("⚙️", "Update Status", "update"),
             ("🗄️", "Manajemen Data", "data"),
             ("🔍", "Lacak Paket", "tracking")
         ]
+    else:
+        menu_items = [("🔍", "Lacak Paket", "tracking")]
     
     for icon, label, page_key in menu_items:
-        is_active = st.session_state.get('current_page') == page_key
         if st.button(f"{icon}  {label}", key=f"nav_{page_key}", use_container_width=True):
             st.session_state['current_page'] = page_key
             st.rerun()
@@ -1031,7 +803,7 @@ if current_page == "tracking":
                 except Exception as e:
                     st.error(f"Terjadi kesalahan: {e}")
         elif not supabase:
-            st.warning("Database tidak terhubung (Demo Mode)")
+            st.warning("⚠️ Database tidak terhubung (Demo Mode)")
 
 # ==========================================
 # PAGE: LOGIN
@@ -1075,11 +847,9 @@ elif current_page == "login":
             
             if st.button("Masuk", use_container_width=True):
                 if pw == SALES_CREDENTIALS.get(cabang):
-                    st.session_state.update({
-                        'user_role': "Sales", 
-                        'user_branch': cabang,
-                        'current_page': 'dashboard'
-                    })
+                    st.session_state['user_role'] = "Sales"
+                    st.session_state['user_branch'] = cabang
+                    st.session_state['current_page'] = 'dashboard'
                     st.rerun()
                 else:
                     st.error("❌ Password salah!")
@@ -1090,11 +860,9 @@ elif current_page == "login":
             
             if st.button("Masuk", use_container_width=True):
                 if pw == SPV_CREDENTIALS.get(cabang):
-                    st.session_state.update({
-                        'user_role': "SPV", 
-                        'user_branch': cabang,
-                        'current_page': 'dashboard'
-                    })
+                    st.session_state['user_role'] = "SPV"
+                    st.session_state['user_branch'] = cabang
+                    st.session_state['current_page'] = 'dashboard'
                     st.rerun()
                 else:
                     st.error("❌ Password salah!")
@@ -1104,11 +872,9 @@ elif current_page == "login":
             
             if st.button("Masuk", use_container_width=True):
                 if pw == ADMIN_PASSWORD:
-                    st.session_state.update({
-                        'user_role': "Admin", 
-                        'user_branch': "Pusat",
-                        'current_page': 'dashboard'
-                    })
+                    st.session_state['user_role'] = "Admin"
+                    st.session_state['user_branch'] = "Pusat"
+                    st.session_state['current_page'] = 'dashboard'
                     st.rerun()
                 else:
                     st.error("❌ Password salah!")
@@ -1119,13 +885,12 @@ elif current_page == "login":
 # PAGE: DASHBOARD
 # ==========================================
 elif current_page == "dashboard":
-    render_header(
-        "Dashboard Monitoring", 
-        f"Cabang: {st.session_state['user_branch']} | Role: {st.session_state['user_role']}"
-    )
+    user_role = st.session_state['user_role']
+    user_branch = st.session_state['user_branch']
+    render_header("Dashboard Monitoring", f"Cabang: {user_branch} | Role: {user_role}")
     
     if not supabase:
-        st.warning("Database tidak terhubung (Demo Mode)")
+        st.warning("⚠️ Database tidak terhubung (Demo Mode)")
         st.stop()
     
     try:
@@ -1133,9 +898,8 @@ elif current_page == "dashboard":
         raw_data = res.data if res.data else []
         
         # Filter by branch
-        if st.session_state['user_role'] in ["Sales", "SPV"]:
-            branch = st.session_state['user_branch']
-            filtered = [d for d in raw_data if d.get('branch') == branch]
+        if user_role in ["Sales", "SPV"]:
+            filtered = [d for d in raw_data if d.get('branch') == user_branch]
         else:
             # Admin filter
             br_list = sorted(list(set([d['branch'] for d in raw_data if d.get('branch')])))
@@ -1163,13 +927,14 @@ elif current_page == "dashboard":
             
             # Alert for pending confirmation
             p_conf = [x for x in filtered if str(x.get('status','')).strip() == "Menunggu Konfirmasi"]
-            if p_conf and st.session_state['user_role'] in ["SPV", "Admin"]:
+            if p_conf and user_role in ["SPV", "Admin"]:
+                conf_count = len(p_conf)
                 st.markdown(f"""
                 <div class="alert-box alert-danger">
                     <span style="font-size: 1.5rem;">🔔</span>
                     <div>
                         <strong>Perhatian!</strong><br>
-                        Ada {len(p_conf)} order baru menunggu konfirmasi
+                        Ada {conf_count} order baru menunggu konfirmasi
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -1187,49 +952,50 @@ elif current_page == "dashboard":
             
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # Charts Section
-            col_chart1, col_chart2 = st.columns(2)
-            
-            with col_chart1:
-                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                st.markdown("#### 📈 Distribusi Status")
+            # Charts Section (if Plotly available)
+            if PLOTLY_AVAILABLE:
+                col_chart1, col_chart2 = st.columns(2)
                 
-                status_counts = {"Diproses": len(pending), "Dikirim": len(shipping), "Selesai": len(done)}
-                fig_pie = px.pie(
-                    values=list(status_counts.values()),
-                    names=list(status_counts.keys()),
-                    color_discrete_sequence=['#F59E0B', '#3B82F6', '#10B981'],
-                    hole=0.4
-                )
-                fig_pie.update_layout(
-                    margin=dict(t=20, b=20, l=20, r=20),
-                    height=250,
-                    showlegend=True,
-                    legend=dict(orientation="h", yanchor="bottom", y=-0.2)
-                )
-                st.plotly_chart(fig_pie, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-            with col_chart2:
-                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
-                st.markdown("#### 📊 Order per Tipe Pengiriman")
-                
-                df_temp = pd.DataFrame(filtered)
-                if 'delivery_type' in df_temp.columns:
-                    type_counts = df_temp['delivery_type'].value_counts()
-                    fig_bar = px.bar(
-                        x=type_counts.index,
-                        y=type_counts.values,
-                        color_discrete_sequence=['#0095DA']
+                with col_chart1:
+                    st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+                    st.markdown("#### 📈 Distribusi Status")
+                    
+                    status_counts = {"Diproses": len(pending), "Dikirim": len(shipping), "Selesai": len(done)}
+                    fig_pie = px.pie(
+                        values=list(status_counts.values()),
+                        names=list(status_counts.keys()),
+                        color_discrete_sequence=['#F59E0B', '#3B82F6', '#10B981'],
+                        hole=0.4
                     )
-                    fig_bar.update_layout(
+                    fig_pie.update_layout(
                         margin=dict(t=20, b=20, l=20, r=20),
                         height=250,
-                        xaxis_title="",
-                        yaxis_title="Jumlah"
+                        showlegend=True,
+                        legend=dict(orientation="h", yanchor="bottom", y=-0.2)
                     )
-                    st.plotly_chart(fig_bar, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
+                    st.plotly_chart(fig_pie, use_container_width=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+                
+                with col_chart2:
+                    st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+                    st.markdown("#### 📊 Order per Tipe Pengiriman")
+                    
+                    df_temp = pd.DataFrame(filtered)
+                    if 'delivery_type' in df_temp.columns and not df_temp.empty:
+                        type_counts = df_temp['delivery_type'].value_counts()
+                        fig_bar = px.bar(
+                            x=type_counts.index,
+                            y=type_counts.values,
+                            color_discrete_sequence=['#0095DA']
+                        )
+                        fig_bar.update_layout(
+                            margin=dict(t=20, b=20, l=20, r=20),
+                            height=250,
+                            xaxis_title="",
+                            yaxis_title="Jumlah"
+                        )
+                        st.plotly_chart(fig_bar, use_container_width=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
             
             # Data Tables
             st.markdown("<br>", unsafe_allow_html=True)
@@ -1243,7 +1009,7 @@ elif current_page == "dashboard":
                         df_all[col] = df_all[col].fillna('-')
                 
                 disp_cols = ['order_id', 'customer_name', 'product_name', 'status', 'last_updated', 'delivery_type']
-                if st.session_state['user_role'] == "Admin":
+                if user_role == "Admin":
                     disp_cols.insert(3, 'branch')
                 
                 final_cols = [c for c in disp_cols if c in df_all.columns]
@@ -1295,33 +1061,36 @@ elif current_page == "dashboard":
 # PAGE: INPUT ORDER
 # ==========================================
 elif current_page == "input":
-    render_header("Input Delivery Order", f"Cabang: {st.session_state['user_branch']}")
+    user_branch = st.session_state['user_branch']
+    render_header("Input Delivery Order", f"Cabang: {user_branch}")
     
     if not supabase:
-        st.warning("Database tidak terhubung (Demo Mode)")
+        st.warning("⚠️ Database tidak terhubung (Demo Mode)")
         st.stop()
     
     # Success State
     if st.session_state.get('sales_success'):
-        st.markdown("""
+        last_id = st.session_state.get('sales_last_id', '')
+        st.markdown(f"""
         <div class="alert-box alert-success">
             <span style="font-size: 2rem;">✅</span>
             <div>
                 <strong>Order Berhasil Dibuat!</strong><br>
-                Order ID: {0}
+                Order ID: {last_id}
             </div>
         </div>
-        """.format(st.session_state.get('sales_last_id')), unsafe_allow_html=True)
-        
-        b64 = st.session_state.get('sales_pdf_data')
-        st.markdown(f"""
-        <a href="data:application/pdf;base64,{b64}" download="SJ_{st.session_state.get('sales_last_id')}.pdf" 
-           style="display: inline-block; background: linear-gradient(135deg, #10B981 0%, #059669 100%); 
-                  color: white; padding: 1rem 2rem; border-radius: 8px; text-decoration: none; 
-                  font-weight: 600; margin: 1rem 0;">
-            📄 Download Surat Jalan (PDF)
-        </a>
         """, unsafe_allow_html=True)
+        
+        b64 = st.session_state.get('sales_pdf_data', '')
+        if b64:
+            st.markdown(f"""
+            <a href="data:application/pdf;base64,{b64}" download="SJ_{last_id}.pdf" 
+               style="display: inline-block; background: linear-gradient(135deg, #10B981 0%, #059669 100%); 
+                      color: white; padding: 1rem 2rem; border-radius: 8px; text-decoration: none; 
+                      font-weight: 600; margin: 1rem 0;">
+                📄 Download Surat Jalan (PDF)
+            </a>
+            """, unsafe_allow_html=True)
         
         if st.button("➕ Buat Order Baru"):
             st.session_state['sales_success'] = False
@@ -1330,10 +1099,11 @@ elif current_page == "input":
     
     # Error State
     if st.session_state.get('sales_error'):
+        error_msg = st.session_state['sales_error']
         st.markdown(f"""
         <div class="alert-box alert-danger">
             <span style="font-size: 1.5rem;">⚠️</span>
-            <div>{st.session_state['sales_error']}</div>
+            <div>{error_msg}</div>
         </div>
         """, unsafe_allow_html=True)
     
@@ -1381,3 +1151,134 @@ elif current_page == "input":
     st.button("🚀 Kirim ke Gudang", type="primary", on_click=process_sales_submit, use_container_width=True)
     
     st.markdown('</div>', unsafe_allow_html=True)
+
+# ==========================================
+# PAGE: UPDATE STATUS
+# ==========================================
+elif current_page == "update":
+    user_role = st.session_state['user_role']
+    user_branch = st.session_state['user_branch']
+    render_header("Update Status Order", f"Validasi dan update status pengiriman")
+    
+    if not supabase:
+        st.warning("⚠️ Database tidak terhubung (Demo Mode)")
+        st.stop()
+    
+    try:
+        q = supabase.table("shipments").select("*").order("created_at", desc=True).limit(50)
+        if user_role == "SPV":
+            q = q.eq("branch", user_branch)
+        res = q.execute()
+        
+        if res.data:
+            opts = {}
+            for d in res.data:
+                key = f"[{d['status']}] {d['order_id']} - {d['customer_name']}"
+                opts[key] = d
+            
+            sel = st.selectbox("📦 Pilih Order untuk Update:", list(opts.keys()), index=None, key="upd_sel")
+            
+            if sel:
+                curr = opts[sel]
+                oid = curr['order_id']
+                
+                # Show current status
+                st.markdown(f"""
+                <div class="alert-box alert-info">
+                    <span style="font-size: 1.5rem;">📋</span>
+                    <div>
+                        <strong>Order: {oid}</strong><br>
+                        Customer: {curr['customer_name']} | Barang: {curr['product_name']}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Tracking iframe
+                with st.expander("🔍 Tracking BES"):
+                    components.iframe("https://www.bes-paket.com/track-package", height=400)
+                
+                # Update form
+                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+                st.markdown("#### ✏️ Update Data")
+                
+                with st.form("upd_form"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        sts = ["Menunggu Konfirmasi", "Diproses Gudang", "Menunggu Kurir", "Dalam Pengiriman", "Selesai/Diterima"]
+                        curr_idx = sts.index(curr['status']) if curr['status'] in sts else 0
+                        st.selectbox("📊 Status", sts, index=curr_idx, key=f"stat_{oid}")
+                        st.text_input("🚚 Kurir", value=curr.get('courier') or "", key=f"kur_{oid}")
+                        st.text_input("📋 No. Resi", value=curr.get('resi') or "", key=f"res_{oid}")
+                    
+                    with col2:
+                        st.text_input("👤 Koreksi Nama", value=curr['customer_name'], key=f"cnama_{oid}")
+                        st.text_input("📦 Koreksi Barang", value=curr['product_name'], key=f"cbar_{oid}")
+                    
+                    st.markdown("---")
+                    st.markdown("**📅 Waktu Update**")
+                    col3, col4 = st.columns(2)
+                    with col3:
+                        st.date_input("Tanggal", value=date.today(), key=f"date_{oid}")
+                    with col4:
+                        st.time_input("Jam", value=datetime.now().time(), key=f"time_{oid}")
+                    
+                    st.form_submit_button("💾 Simpan Perubahan", on_click=process_admin_update, args=(oid,))
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.info("📭 Tidak ada data order")
+            
+    except Exception as e:
+        st.error(f"Terjadi kesalahan: {e}")
+
+# ==========================================
+# PAGE: DATA MANAGEMENT
+# ==========================================
+elif current_page == "data":
+    user_role = st.session_state['user_role']
+    user_branch = st.session_state['user_branch']
+    render_header("Manajemen Data", "Download, hapus, dan kelola data pengiriman")
+    
+    if not supabase:
+        st.warning("⚠️ Database tidak terhubung (Demo Mode)")
+        st.stop()
+    
+    try:
+        res = supabase.table("shipments").select("*").execute()
+        all_data = res.data if res.data else []
+        
+        if user_role == "SPV":
+            all_data = [d for d in all_data if d.get('branch') == user_branch]
+        
+        if all_data:
+            df = pd.DataFrame(all_data)
+            
+            # Tabs
+            tab1, tab2, tab3 = st.tabs(["📥 Download Excel", "🗑️ Hapus Order", "🔥 Reset Database"])
+            
+            with tab1:
+                st.markdown('<div class="modern-card">', unsafe_allow_html=True)
+                st.markdown("#### 📊 Export Data ke Excel")
+                st.markdown(f"Total data: **{len(all_data)}** order")
+                
+                # Format dates
+                df_export = df.copy()
+                for col in ['created_at', 'last_updated']:
+                    if col in df_export.columns:
+                        df_export[col] = pd.to_datetime(df_export[col], errors='coerce').dt.strftime('%d/%m/%Y %H:%M')
+                
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    df_export.to_excel(writer, index=False, sheet_name='Laporan')
+                    wb = writer.book
+                    ws = writer.sheets['Laporan']
+                    fmt = wb.add_format({'bold': True, 'fg_color': '#0095DA', 'font_color': '#FFFFFF', 'border': 1})
+                    for i, v in enumerate(df_export.columns.values):
+                        ws.write(0, i, v, fmt)
+                        ws.set_column(i, i, 20)
+                
+                st.download_button(
+                    "📥 Download File Excel",
+                    output.getvalue(),
+                    file_name=
