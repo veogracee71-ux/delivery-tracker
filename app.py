@@ -1,7 +1,7 @@
-# Versi 2.65 (UX Improvement)
+# Versi 2.66 (Layout Optimization)
 # Status: Stabil
-# Update: FIX BLANK PAGE PADA VALIDASI. Menambahkan pesan informasi (st.info) jika tidak ada 
-#         data yang perlu divalidasi agar staf tidak bingung melihat layar putih polos.
+# Update: OPTIMALISASI LAYOUT FORMULIR. Mengatur inputan ke dalam 2 kolom berdampingan pada menu 
+#         "Input Order" dan "Update Status" agar tampilan lebih ringkas dan profesional.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -184,16 +184,13 @@ def process_sales_submit():
     in_inst = s.get("in_instalasi", "Tidak")
     in_fee = s.get("in_biaya_inst", "") if in_inst == "Ya - Vendor" else ""
     
-    # --- FIX TIMEZONE: TANGKAP WAKTU SEKALI DAN DI-OFFSET +7 JAM (WIB) ---
     TIME_OFFSET = timedelta(hours=7) 
     current_time_wib = datetime.utcnow() + TIME_OFFSET 
 
-    # VALIDASI DASAR
     if not (in_id and in_sales and in_nama and in_barang):
         st.session_state['sales_error'] = "⚠️ Data wajib belum lengkap (ID, Sales, Customer, Barang)."
         return
 
-    # VALIDASI TUKAR TAMBAH
     if in_tipe == "Tukar Tambah" and not in_old_item:
         st.session_state['sales_error'] = "⚠️ Anda memilih Tukar Tambah. Harap isi Detail Barang Lama!"
         return
@@ -217,7 +214,6 @@ def process_sales_submit():
         st.session_state['sales_pdf_data'] = b64_pdf
         st.session_state['sales_last_id'] = in_id
         
-        # Clear Data
         for k in ["in_id", "in_sales", "in_sales_hp", "in_nama", "in_hp", "in_alamat", "in_barang", "in_biaya_inst", "in_barang_lama"]:
             st.session_state[k] = ""
         st.session_state["in_tipe"] = "Reguler"
@@ -291,7 +287,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.65 (Fix Blank UI)**")
+    st.caption("🚀 **Versi 2.66 (Layout Fix)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -411,8 +407,6 @@ elif menu == "📊 Dashboard Monitoring":
     try:
         res = supabase.table("shipments").select("*").execute()
         if res.data:
-            
-            # --- FILTERING DATA ---
             if st.session_state['user_role'] in ["Sales", "SPV"]:
                 branch = st.session_state['user_branch']
                 st.info(f"📍 Data Cabang: **{branch}**")
@@ -426,12 +420,10 @@ elif menu == "📊 Dashboard Monitoring":
             if not filtered:
                 st.info("Belum ada data pengiriman untuk filter ini.")
             else:
-                # --- METRICS & STATUS LOGIC ---
                 pending = [x for x in filtered if "selesai" not in x['status'].lower() and "dikirim" not in x['status'].lower() and "jalan" not in x['status'].lower() and "pengiriman" not in x['status'].lower()]
                 shipping = [x for x in filtered if "dikirim" in x['status'].lower() or "jalan" in x['status'].lower() or "pengiriman" in x['status'].lower()]
                 done = [x for x in filtered if "selesai" in x['status'].lower() or "diterima" in x['status'].lower()]
                 
-                # Badge Notifikasi
                 pending_confirmation = [x for x in filtered if x['status'].strip() == "Menunggu Konfirmasi"]
                 if pending_confirmation and st.session_state['user_role'] in ["SPV", "Admin"]:
                      st.error(f"🔔 PERHATIAN: Ada {len(pending_confirmation)} Order Baru Menunggu Konfirmasi!", icon="🔥")
@@ -442,9 +434,7 @@ elif menu == "📊 Dashboard Monitoring":
                 c3.metric("✅ Selesai", f"{len(done)}")
                 st.divider()
 
-                # --- FIX TAMPILAN DASHBOARD ---
                 df_display_all = pd.DataFrame(filtered)
-                
                 date_format = '%d/%m/%Y %H:%M'
                 for col in ['last_updated', 'created_at']:
                     if col in df_display_all.columns:
@@ -456,7 +446,6 @@ elif menu == "📊 Dashboard Monitoring":
                      display_cols.insert(3, 'branch')
                 
                 final_display_cols = [col for col in display_cols if col in df_display_all.columns]
-
                 pending_ids = [d.get('order_id') for d in pending if d.get('order_id')]
                 shipping_ids = [d.get('order_id') for d in shipping if d.get('order_id')]
                 done_ids = [d.get('order_id') for d in done if d.get('order_id')]
@@ -472,7 +461,7 @@ elif menu == "📊 Dashboard Monitoring":
     except Exception as e: st.error(str(e))
 
 # ==========================================
-# HALAMAN 4: INPUT ORDER
+# HALAMAN 4: INPUT ORDER (OPTIMIZED LAYOUT)
 # ==========================================
 elif menu == "📝 Input Delivery Order":
     st.title("📝 Input Delivery Order")
@@ -492,28 +481,49 @@ elif menu == "📝 Input Delivery Order":
 
     if not st.session_state.get('sales_success'):
         with st.container(border=True):
-            st.subheader("Data Pelanggan & Barang")
+            # --- BAGIAN 1: INFO SALES & ORDER ---
+            st.subheader("Informasi Sales & Order")
             c1, c2 = st.columns(2)
-            st.text_input("Order ID (Wajib)", key="in_id")
-            st.text_input("Nama Sales", key="in_sales")
-            st.text_input("No WA Sales", key="in_sales_hp")
-            st.text_input("Nama Customer", key="in_nama")
-            st.text_input("No HP Customer", key="in_hp")
-            st.text_area("Alamat Pengiriman", key="in_alamat")
-            st.text_input("Nama Barang", key="in_barang")
-            sel_tipe = st.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"], key="in_tipe")
-            if sel_tipe == "Tukar Tambah":
-                st.info("🔄 Mode Tukar Tambah Aktif")
-                st.text_input("Detail Barang Lama (Wajib)", placeholder="Merk, Tipe, Kondisi...", key="in_barang_lama")
-            sel_inst = st.selectbox("Instalasi?", ["Tidak", "Ya - Vendor"], key="in_instalasi")
-            if sel_inst == "Ya - Vendor":
-                st.info("🔧 Mode Instalasi Vendor Aktif")
-                st.text_input("Biaya Transport (Rp)", key="in_biaya_inst")
+            with c1:
+                st.text_input("Order ID (Wajib)", key="in_id")
+                st.text_input("Nama Sales", key="in_sales")
+            with c2:
+                st.text_input("No WA Sales", key="in_sales_hp")
+            
+            st.divider()
+            
+            # --- BAGIAN 2: INFO CUSTOMER ---
+            st.subheader("Data Pelanggan")
+            c3, c4 = st.columns(2)
+            with c3:
+                st.text_input("Nama Customer", key="in_nama")
+                st.text_input("No HP Customer", key="in_hp")
+            with c4:
+                st.text_area("Alamat Pengiriman", key="in_alamat", height=100)
+            
+            st.divider()
+            
+            # --- BAGIAN 3: INFO BARANG & LAYANAN ---
+            st.subheader("Detail Barang & Layanan")
+            c5, c6 = st.columns(2)
+            with c5:
+                st.text_input("Nama Barang", key="in_barang")
+                sel_tipe = st.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"], key="in_tipe")
+                if sel_tipe == "Tukar Tambah":
+                    st.info("🔄 Tukar Tambah Aktif")
+                    st.text_input("Detail Barang Lama (Wajib)", placeholder="Merk, Tipe, Kondisi...", key="in_barang_lama")
+            
+            with c6:
+                sel_inst = st.selectbox("Instalasi?", ["Tidak", "Ya - Vendor"], key="in_instalasi")
+                if sel_inst == "Ya - Vendor":
+                    st.info("🔧 Instalasi Vendor Aktif")
+                    st.text_input("Biaya Transport (Rp)", key="in_biaya_inst")
+            
             st.divider()
             st.button("Kirim ke Gudang", type="primary", on_click=process_sales_submit)
 
 # ==========================================
-# HALAMAN 5: UPDATE STATUS (FIX BLANK UI)
+# HALAMAN 5: UPDATE STATUS (OPTIMIZED LAYOUT)
 # ==========================================
 elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SPV)":
     st.title("⚙️ Validasi Order")
@@ -530,28 +540,33 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
             oid = curr['order_id']
             with st.expander("Tracking PT. BES"):
                 st.link_button("Buka Web BES", "https://www.bes-paket.com/track-package")
-                components.iframe("https://www.bes-paket.com/track-package", height=500, scrolling=True)
+                components.iframe("https://www.bes-paket.com/track-package", height=400, scrolling=True)
             
             with st.form("upd_form"):
+                # --- LAYOUT KOLOM UNTUK UPDATE ---
                 c1, c2 = st.columns(2)
                 sts = ["Menunggu Konfirmasi", "Diproses Gudang", "Menunggu Kurir", "Dalam Pengiriman", "Selesai/Diterima"]
                 try: idx = sts.index(curr['status']) 
                 except: idx=0
                 
-                st.selectbox("Status", sts, index=idx, key=f"stat_{oid}")
-                st.text_input("Kurir", value=curr['courier'] or "", key=f"kur_{oid}")
-                st.text_input("Resi", value=curr['resi'] or "", key=f"res_{oid}")
+                with c1:
+                    st.selectbox("Status Baru", sts, index=idx, key=f"stat_{oid}")
+                    st.text_input("Nama Kurir", value=curr['courier'] or "", key=f"kur_{oid}")
+                    st.text_input("Nomor Resi / Plat No", value=curr['resi'] or "", key=f"res_{oid}")
+                
+                with c2:
+                    st.write("**Waktu Kejadian (Fakta Lapangan):**")
+                    st.date_input("Tanggal", value="today", key=f"date_{oid}")
+                    st.time_input("Jam", value="now", key=f"time_{oid}")
+                
                 st.divider()
-                st.write("**Waktu Fakta Lapangan:**")
-                st.date_input("Tanggal", value="today", key=f"date_{oid}")
-                st.time_input("Jam", value="now", key=f"time_{oid}")
-                st.divider()
-                st.caption("Koreksi Data:")
-                st.text_input("Nama Customer", value=curr['customer_name'], key=f"cnama_{oid}")
-                st.text_input("Nama Barang", value=curr['product_name'], key=f"cbar_{oid}")
-                st.form_submit_button("Simpan", on_click=process_admin_update, args=(oid,))
+                st.caption("Koreksi Data Pelanggan/Barang:")
+                cx, cy = st.columns(2)
+                with cx: st.text_input("Nama Customer", value=curr['customer_name'], key=f"cnama_{oid}")
+                with cy: st.text_input("Nama Barang", value=curr['product_name'], key=f"cbar_{oid}")
+                
+                st.form_submit_button("Simpan Perubahan")
     else:
-        # FIX V2.65: Munculkan pesan jika data kosong agar tidak blank putih
         st.info("📍 Belum ada order yang masuk untuk divalidasi di cabang ini.")
 
 # ==========================================
