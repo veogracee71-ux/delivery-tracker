@@ -1,8 +1,7 @@
-# Versi 2.48
+# Versi 2.50
 # Update:
-# 1. Mengubah fitur Download menjadi EXCEL (.xlsx).
-# 2. Styling Excel: Header Biru, Border Rapi, Auto-width columns.
-# 3. Nama File Dinamis: Mencakup Nama Cabang, Bulan, dan Tahun.
+# 1. Menambahkan "Badge Notifikasi" (Alert Merah) di Dashboard SPV/Admin jika ada order "Menunggu Konfirmasi".
+# 2. Fitur lain tetap utuh (Layout PDF, QR Link, dll).
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -16,7 +15,7 @@ import qrcode
 import tempfile
 import os
 import pandas as pd
-import io # Import IO untuk buffer Excel
+import io 
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(
@@ -49,7 +48,7 @@ supabase: Client = create_client(url, key)
 def get_status_color(status):
     s = status.lower()
     if "selesai" in s or "diterima" in s: return "success"
-    elif "dikirim" in s or "jalan" in s: return "info"
+    elif "dikirim" in s or "jalan" in s or "pengiriman" in s: return "info"
     else: return "warning"
 
 # --- FUNGSI CETAK PDF ---
@@ -267,7 +266,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.48 (Beta)**")
+    st.caption("🚀 **Versi 2.50 (Beta)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -392,8 +391,13 @@ elif menu == "📊 Dashboard Monitoring":
                 sel_br = st.selectbox("Filter Cabang:", br_list)
                 filtered = res.data if sel_br == "Semua Cabang" else [d for d in res.data if d.get('branch') == sel_br]
 
-            pending = [x for x in filtered if "selesai" not in x['status'].lower() and "dikirim" not in x['status'].lower() and "jalan" not in x['status'].lower()]
-            shipping = [x for x in filtered if "dikirim" in x['status'].lower() or "jalan" in x['status'].lower()]
+            # UPDATE 2.50: NOTIFIKASI BADGE UNTUK SPV/ADMIN
+            pending_confirmation = [x for x in filtered if x['status'] == "Menunggu Konfirmasi"]
+            if pending_confirmation and st.session_state['user_role'] in ["SPV", "Admin"]:
+                 st.error(f"🔔 PERHATIAN: Ada {len(pending_confirmation)} Order Baru Menunggu Konfirmasi!", icon="🔥")
+
+            pending = [x for x in filtered if "selesai" not in x['status'].lower() and "dikirim" not in x['status'].lower() and "jalan" not in x['status'].lower() and "pengiriman" not in x['status'].lower()]
+            shipping = [x for x in filtered if "dikirim" in x['status'].lower() or "jalan" in x['status'].lower() or "pengiriman" in x['status'].lower()]
             done = [x for x in filtered if "selesai" in x['status'].lower() or "diterima" in x['status'].lower()]
 
             c1, c2, c3 = st.columns(3)
@@ -498,7 +502,7 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
                 st.form_submit_button("Simpan", on_click=process_admin_update, args=(oid,))
 
 # ==========================================
-# HALAMAN 6: MANAJEMEN DATA (NEW)
+# HALAMAN 6: MANAJEMEN DATA
 # ==========================================
 elif menu == "🗄️ Manajemen Data":
     st.title("🗄️ Manajemen Data")
@@ -515,50 +519,33 @@ elif menu == "🗄️ Manajemen Data":
         
         tab1, tab2, tab3 = st.tabs(["📥 Download Laporan (Excel)", "🗑️ Hapus Per Order", "🔥 Reset Database (Bahaya)"])
         
-        # TAB 1: DOWNLOAD EXCEL BERWARNA
         with tab1:
             st.subheader("Download Data Bulanan (Excel)")
             st.write(f"Total Data: **{len(df)}** baris")
             
-            # Persiapan Filename
             cabang_name = st.session_state['user_branch'].replace(" ", "_") if st.session_state['user_role'] == "SPV" else "Semua_Cabang"
             bulan_indo = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
             now = datetime.now()
             nama_bulan = bulan_indo[now.month - 1]
             file_name = f"Laporan_Delivery_{cabang_name}_{nama_bulan}_{now.year}.xlsx"
             
-            # Generate Excel in Memory
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 df.to_excel(writer, index=False, sheet_name='Laporan')
                 workbook = writer.book
                 worksheet = writer.sheets['Laporan']
                 
-                # Format Header (Biru Blibli, Teks Putih, Bold, Border)
                 header_fmt = workbook.add_format({
-                    'bold': True,
-                    'fg_color': '#0095DA',
-                    'font_color': '#FFFFFF',
-                    'border': 1,
-                    'text_wrap': True,
-                    'valign': 'vcenter',
-                    'align': 'center'
+                    'bold': True, 'fg_color': '#0095DA', 'font_color': '#FFFFFF',
+                    'border': 1, 'text_wrap': True, 'valign': 'vcenter', 'align': 'center'
                 })
-                
-                # Format Body (Border)
                 body_fmt = workbook.add_format({'border': 1, 'valign': 'top'})
                 
-                # Terapkan Header
                 for col_num, value in enumerate(df.columns.values):
                     worksheet.write(0, col_num, value, header_fmt)
                 
-                # Terapkan Body & Auto-width
                 for i, col in enumerate(df.columns):
-                    # Tulis data dengan border
-                    # Note: Menulis ulang data satu per satu di xlsxwriter agak lambat untuk big data, 
-                    # tapi aman untuk ribuan baris.
-                    # Cara cepat: Terapkan style kolom
-                    worksheet.set_column(i, i, 20, body_fmt) # Set lebar default 20 & border
+                    worksheet.set_column(i, i, 20, body_fmt)
             
             excel_data = output.getvalue()
             
