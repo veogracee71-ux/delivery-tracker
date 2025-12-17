@@ -1,7 +1,7 @@
-# Versi 2.65 (UX Improvement - Stabil)
-# Status: Produksi
-# Deskripsi: Fitur lengkap dengan perbaikan tampilan halaman kosong (blank UI fix).
-#            Formulir menggunakan layout standar satu kolom untuk kemudahan input HP.
+# Versi 2.71 (Role Access Update)
+# Status: Produksi - Stabil
+# Update: Membatasi menu "Input Delivery Order" hanya untuk role Sales.
+#         SPV dan Admin Pusat sekarang tidak lagi memiliki akses input untuk menjaga integritas data.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -256,7 +256,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR LOGIC ---
+# --- SIDEBAR LOGIC (ROLE BASED ACCESS) ---
 if 'user_role' not in st.session_state: st.session_state['user_role'] = "Guest" 
 if 'user_branch' not in st.session_state: st.session_state['user_branch'] = ""
 
@@ -265,8 +265,10 @@ if st.session_state['user_role'] == "Guest":
 elif st.session_state['user_role'] == "Sales":
     menu_options = ["📊 Dashboard Monitoring", "📝 Input Delivery Order", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "SPV":
-    menu_options = ["📊 Dashboard Monitoring", "📝 Input Delivery Order", "⚙️ Update Status", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
+    # UPDATE V2.71: Menghilangkan menu Input untuk SPV
+    menu_options = ["📊 Dashboard Monitoring", "⚙️ Update Status", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "Admin":
+    # UPDATE V2.71: Menghilangkan menu Input untuk Admin
     menu_options = ["📊 Dashboard Monitoring", "⚙️ Update Status", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
 
 menu = st.sidebar.radio("Menu Aplikasi", menu_options)
@@ -280,7 +282,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.65 (Fix Blank UI)**")
+    st.caption("🚀 **Versi 2.71 (Role Access Fix)**")
 
 # ==========================================
 # HALAMAN 1: CEK RESI (LANDING PAGE)
@@ -388,9 +390,14 @@ elif menu == "📊 Dashboard Monitoring":
     except Exception as e: st.error(str(e))
 
 # ==========================================
-# HALAMAN 4: INPUT ORDER (STANDARD VERTICAL LAYOUT)
+# HALAMAN 4: INPUT ORDER (Hanya untuk Sales)
 # ==========================================
 elif menu == "📝 Input Delivery Order":
+    # Proteksi Tambahan di tingkat Halaman
+    if st.session_state['user_role'] not in ["Sales"]:
+        st.error("⛔ Akses Ditolak. Menu ini hanya untuk staf Sales Cabang.")
+        st.stop()
+
     st.title("📝 Input Delivery Order")
     if st.session_state.get('sales_success'):
         st.success(f"✅ Order {st.session_state.get('sales_last_id')} Berhasil!")
@@ -425,7 +432,7 @@ elif menu == "📝 Input Delivery Order":
             st.button("Kirim ke Gudang", type="primary", on_click=process_sales_submit)
 
 # ==========================================
-# HALAMAN 5: UPDATE STATUS (FIX BLANK UI)
+# HALAMAN 5: UPDATE STATUS
 # ==========================================
 elif menu == "⚙️ Update Status":
     st.title("⚙️ Validasi Order")
