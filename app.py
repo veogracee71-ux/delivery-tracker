@@ -1,9 +1,7 @@
-# Versi 2.53
-# Update:
-# 1. Mengubah Form Input menjadi Dinamis (Interactive).
-# 2. Kolom "Barang Lama" HANYA MUNCUL jika pilih Tukar Tambah.
-# 3. Kolom "Biaya Transport" HANYA MUNCUL jika pilih Instalasi Vendor.
-# 4. Validasi Data lebih aman (Data hidden otomatis tidak disimpan).
+# Versi 2.54
+# Update: FIX SINKRONISASI WAKTU.
+# 1. Waktu input (timestamp) ditangkap sekali di fungsi submit.
+# 2. Timestamp yang sama digunakan untuk database dan cetak PDF (agar TANGGAL/JAM di kertas sinkron 100% dengan data sistem).
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -53,8 +51,8 @@ def get_status_color(status):
     elif "dikirim" in s or "jalan" in s: return "info"
     else: return "warning"
 
-# --- FUNGSI CETAK PDF ---
-def create_thermal_pdf(data):
+# --- FUNGSI CETAK PDF (Update: Menerima timestamp dari database) ---
+def create_thermal_pdf(data, print_timestamp):
     def safe_text(text):
         if not text: return "-"
         return str(text).encode('latin-1', 'replace').decode('latin-1')
@@ -83,9 +81,11 @@ def create_thermal_pdf(data):
     pdf.cell(20, 5, "No Order", 0, 0)
     pdf.set_font("Arial", 'B', 11)
     pdf.cell(52, 5, f": {safe_text(data['order_id'])}", 0, 1)
+    
+    # FIX SINKRONISASI WAKTU: Gunakan waktu yang dikirim dari submit
     pdf.set_font("Arial", '', 10)
     pdf.cell(20, 5, "Tanggal", 0, 0)
-    pdf.cell(52, 5, f": {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 1)
+    pdf.cell(52, 5, f": {print_timestamp.strftime('%d/%m/%Y %H:%M')}", 0, 1)
     draw_line()
     
     # PENERIMA
@@ -169,7 +169,7 @@ def create_thermal_pdf(data):
     
     return pdf.output(dest='S').encode('latin-1')
 
-# --- CALLBACK SALES SUBMIT ---
+# --- CALLBACK SALES SUBMIT (Update: Menangkap waktu tunggal) ---
 def process_sales_submit():
     st.session_state['sales_success'] = False
     st.session_state['sales_error'] = None
@@ -181,13 +181,12 @@ def process_sales_submit():
     in_barang, in_tipe = s.get("in_barang", ""), s.get("in_tipe", "Reguler")
     branch = s.get("user_branch", "")
     
-    # LOGIKA KONDISIONAL (DATA CLEANING)
-    # Jika bukan tukar tambah, kosongkan data barang lama walau user iseng isi
     in_old_item = s.get("in_barang_lama", "") if in_tipe == "Tukar Tambah" else ""
-    
     in_inst = s.get("in_instalasi", "Tidak")
-    # Jika tidak instalasi, kosongkan biaya
     in_fee = s.get("in_biaya_inst", "") if in_inst == "Ya - Vendor" else ""
+    
+    # TANGKAP WAKTU SEKALI (FIX SINKRONISASI)
+    current_time = datetime.now()
 
     # VALIDASI DASAR
     if not (in_id and in_sales and in_nama and in_barang):
@@ -204,13 +203,15 @@ def process_sales_submit():
             "order_id": in_id, "customer_name": in_nama, "customer_phone": in_hp,
             "delivery_address": in_alamat, "product_name": in_barang, "delivery_type": in_tipe,
             "sales_name": in_sales, "sales_phone": in_sales_hp, "branch": branch,
-            "status": "Menunggu Konfirmasi", "last_updated": datetime.now().isoformat(),
+            "status": "Menunggu Konfirmasi", 
+            "last_updated": current_time.isoformat(), # Gunakan waktu yang ditangkap
             "installation_opt": in_inst, "installation_fee": in_fee,
             "old_product_name": in_old_item
         }
         supabase.table("shipments").insert(payload).execute()
         
-        pdf_bytes = create_thermal_pdf(payload)
+        # Kirim payload dan timestamp yang sama ke fungsi PDF
+        pdf_bytes = create_thermal_pdf(payload, current_time)
         b64_pdf = base64.b64encode(pdf_bytes).decode('latin-1')
         
         st.session_state['sales_success'] = True
@@ -229,6 +230,30 @@ def process_sales_submit():
             st.session_state['sales_error'] = f"⛔ Order ID **{in_id}** sudah ada."
         else:
             st.session_state['sales_error'] = f"Error: {err_msg}"
+
+# --- CALLBACK ADMIN UPDATE ---
+def process_admin_update(oid):
+    new_stat = st.session_state.get(f"stat_{oid}")
+    new_kurir = st.session_state.get(f"kur_{oid}")
+    new_resi = st.session_state.get(f"res_{oid}")
+    d_date = st.session_state.get(f"date_{oid}")
+    d_time = st.session_state.get(f"time_{oid}")
+    corr_nama = st.session_state.get(f"cnama_{oid}")
+    corr_barang = st.session_state.get(f"cbar_{oid}")
+    
+    final_dt = datetime.combine(d_date, d_time).isoformat()
+    
+    upd = {
+        "status": new_stat, "courier": new_kurir, "resi": new_resi,
+        "last_updated": final_dt, "customer_name": corr_nama, "product_name": corr_barang
+    }
+    
+    try:
+        supabase.table("shipments").update(upd).eq("order_id", oid).execute()
+        st.toast("Data Terupdate!", icon="✅")
+        st.session_state["upd_sel"] = None
+    except Exception as e:
+        st.toast(f"Error: {e}", icon="❌")
 
 # --- CUSTOM CSS ---
 st.markdown("""
@@ -266,11 +291,11 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.53 (Beta)**")
+    st.caption("🚀 **Versi 2.54 (Fix Sync)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
-# HALAMAN 1: CEK RESI
+# HALAMAN 1: CEK RESI (LANDING PAGE)
 # ==========================================
 if menu == "🔍 Cek Resi (Public)":
     st.title("🔍 Lacak Pengiriman")
@@ -321,7 +346,7 @@ if menu == "🔍 Cek Resi (Public)":
             except: st.error("Terjadi kesalahan koneksi.")
 
 # ==========================================
-# HALAMAN 2: LOGIN
+# HALAMAN 2: LOGIN (PROTECTED WITH GATEKEEPER)
 # ==========================================
 elif menu == "🔐 Login Staff":
     st.title("🔐 Login Staff & Admin")
@@ -453,7 +478,6 @@ elif menu == "📝 Input Delivery Order":
             st.markdown("**Detail Barang**")
             c5, c6 = st.columns(2)
             st.text_input("Nama Barang", key="in_barang")
-            # Interaktif: Pilihan akan mereload halaman (default behavior container)
             sel_tipe = st.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"], key="in_tipe")
             
             # KONDISIONAL: HANYA MUNCUL JIKA TUKAR TAMBAH
@@ -470,7 +494,6 @@ elif menu == "📝 Input Delivery Order":
                 st.text_input("Biaya Transport (Rp)", key="in_biaya_inst")
             
             st.divider()
-            # Tombol Kirim (Bukan form submit button lagi, tapi button biasa)
             st.button("Kirim ke Gudang", type="primary", on_click=process_sales_submit)
 
 # ==========================================
