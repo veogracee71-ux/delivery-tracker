@@ -680,4 +680,4 @@ elif menu == "🗄️ Manajemen Data":
                         time.sleep(2)
                         st.rerun()
     else:
-        st.info("Belum ada data untuk dikelola.")
+        st.info("Belum ada data untuk dikelola.")    
