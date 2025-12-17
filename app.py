@@ -1,14 +1,15 @@
-# Versi 2.38
+# Versi 2.39
 # Update:
-# 1. Menghapus KOTAK (Border) pada judul "SURAT JALAN" di PDF Struk.
-# 2. QR Code tetap berfungsi otomatis berdasarkan Order ID untuk tracking spesifik.
+# 1. PDF Struk: Judul "SURAT JALAN" dipastikan Center dan diperbesar.
+# 2. PDF Struk: Label "PENGIRIM (SALES)" diganti jadi "SALES".
+# 3. Fitur lain tetap sama (Download button tetap muncul setelah submit).
 
 import streamlit as st
 import streamlit.components.v1 as components 
 from supabase import create_client, Client
 from urllib.parse import quote
 import time
-from datetime import datetime, date 
+from datetime import datetime
 from fpdf import FPDF
 import base64
 import qrcode
@@ -49,7 +50,7 @@ def get_status_color(status):
     elif "dikirim" in s or "jalan" in s: return "info"
     else: return "warning"
 
-# --- FUNGSI CETAK PDF (UPDATE 2.38) ---
+# --- FUNGSI CETAK PDF (UPDATE 2.39) ---
 def create_thermal_pdf(data):
     def safe_text(text):
         if not text: return "-"
@@ -67,10 +68,9 @@ def create_thermal_pdf(data):
         pdf.line(margin, y, margin + w_full, y)
         pdf.ln(2)
 
-    # 1. HEADER (Update: Tanpa Kotak)
-    pdf.set_font("Arial", 'B', 14)
-    # Border diubah dari 1 menjadi 0 (Tanpa Garis)
-    pdf.cell(w_full, 8, "SURAT JALAN", 0, 1, 'C')
+    # 1. HEADER (SURAT JALAN CENTER)
+    pdf.set_font("Arial", 'B', 16) # Font diperbesar biar tegas
+    pdf.cell(w_full, 8, "SURAT JALAN", 0, 1, 'C') # Center Alignment
     draw_line()
     
     # 2. INFO
@@ -96,9 +96,9 @@ def create_thermal_pdf(data):
     pdf.multi_cell(w_full, 5, safe_text(data['delivery_address']))
     draw_line()
     
-    # 4. PENGIRIM
+    # 4. SALES (Update: Label Ganti Jadi SALES)
     pdf.set_font("Arial", 'B', 11)
-    pdf.cell(w_full, 6, "PENGIRIM (SALES):", 0, 1)
+    pdf.cell(w_full, 6, "SALES:", 0, 1) # Label Baru
     pdf.set_font("Arial", '', 10)
     pdf.cell(15, 5, "Nama", 0, 0)
     pdf.cell(57, 5, f": {safe_text(data['sales_name'])} ({safe_text(data['branch'])})", 0, 1)
@@ -159,7 +159,7 @@ def create_thermal_pdf(data):
     
     return pdf.output(dest='S').encode('latin-1')
 
-# --- CALLBACK ---
+# --- CALLBACK SALES SUBMIT ---
 def process_sales_submit():
     st.session_state['sales_success'] = False
     st.session_state['sales_error'] = None
@@ -218,7 +218,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR LOGIC (MENU SWAPPED) ---
+# --- SIDEBAR LOGIC ---
 if 'user_role' not in st.session_state: st.session_state['user_role'] = "Guest" 
 if 'user_branch' not in st.session_state: st.session_state['user_branch'] = ""
 
@@ -243,7 +243,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.38 (Beta)**")
+    st.caption("🚀 **Versi 2.39 (Beta)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -300,7 +300,6 @@ if menu == "🔍 Cek Resi (Public)":
 elif menu == "🔐 Login Staff":
     st.title("🔐 Login Staff & Admin")
     
-    # --- LOGIKA GATEKEEPER ---
     if "gate_unlocked" not in st.session_state:
         st.session_state["gate_unlocked"] = False
 
