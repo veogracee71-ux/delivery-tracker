@@ -1,7 +1,8 @@
-# Versi 2.30
+# Versi 2.32
 # Update:
-# 1. Menghapus Header Toko & Slogan di PDF Struk (Langsung Surat Jalan).
-# 2. Mengubah isi QR Code menjadi TEXT DATA (Info Order) agar pasti bisa discan (tidak error link not found).
+# 1. LAYOUT STRUK JUMBO: Semua font diperbesar (Min 10pt) agar tegas dan jelas.
+# 2. Menghapus teks kecil/slogan/catatan kaki yang tidak perlu.
+# 3. Fokus pada keterbacaan (Readability) di kertas thermal.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -43,99 +44,129 @@ def get_status_color(status):
     elif "dikirim" in s or "jalan" in s: return "info"
     else: return "warning"
 
-# --- FUNGSI CETAK PDF (UPDATE 2.30) ---
+# --- FUNGSI CETAK PDF (UPDATE 2.32 - FONT BESAR & TEGAS) ---
 def create_thermal_pdf(data):
-    pdf = FPDF(orientation='P', unit='mm', format=(80, 180))
+    # Setup PDF: Lebar 80mm, Tinggi Auto (diset panjang biar aman)
+    pdf = FPDF(orientation='P', unit='mm', format=(80, 250))
     pdf.add_page()
-    pdf.set_margins(4, 4, 4) 
     
-    # 1. HEADER (Update: Hapus Nama Toko, Langsung Judul)
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(72, 6, "SURAT JALAN", 1, 1, 'C') # Langsung Judul
-    pdf.ln(2)
+    # Margin 4mm
+    margin = 4
+    pdf.set_margins(margin, margin, margin)
     
-    # 2. INFO TRANSAKSI
-    pdf.set_font("Courier", '', 8)
-    pdf.cell(18, 4, "No Order", 0, 0)
-    pdf.set_font("Courier", 'B', 9) 
-    pdf.cell(54, 4, f": {data['order_id']}", 0, 1)
+    # Lebar area cetak efektif
+    w_full = 72
     
-    pdf.set_font("Courier", '', 8)
-    pdf.cell(18, 4, "Tanggal", 0, 0)
-    pdf.cell(54, 4, f": {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 1)
+    def draw_line():
+        pdf.ln(2)
+        y = pdf.get_y()
+        pdf.line(margin, y, margin + w_full, y)
+        pdf.ln(2)
+
+    # 1. HEADER (Sangat Jelas)
+    pdf.set_font("Arial", 'B', 16) # Font Besar
+    pdf.cell(w_full, 8, "BLIBLI ELEKTRONIK", 0, 1, 'C')
     
-    pdf.cell(72, 2, "-"*45, 0, 1, 'C') 
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(w_full, 8, "SURAT JALAN", 1, 1, 'C')
+    draw_line()
     
-    # 3. PENGIRIM & PENERIMA
-    pdf.set_font("Arial", 'B', 9)
-    pdf.cell(72, 5, "KEPADA (PENERIMA):", 0, 1)
-    pdf.set_font("Arial", '', 9)
-    pdf.multi_cell(72, 4, f"{data['customer_name']}\n{data['customer_phone']}\n{data['delivery_address']}")
+    # 2. INFO TRANSAKSI (Tegas)
+    pdf.set_font("Arial", '', 10)
+    pdf.cell(20, 5, "No Order", 0, 0)
+    pdf.set_font("Arial", 'B', 11) # Order ID Besar
+    pdf.cell(52, 5, f": {data['order_id']}", 0, 1)
+    
+    pdf.set_font("Arial", '', 10)
+    pdf.cell(20, 5, "Tanggal", 0, 0)
+    pdf.cell(52, 5, f": {datetime.now().strftime('%d/%m/%y %H:%M')}", 0, 1)
+    
+    draw_line()
+    
+    # 3. PENERIMA (Fokus Alamat)
+    pdf.set_font("Arial", 'B', 11)
+    pdf.cell(w_full, 6, "PENERIMA:", 0, 1)
+    
+    pdf.set_font("Arial", 'B', 12) # Nama Customer Besar
+    pdf.multi_cell(w_full, 6, f"{data['customer_name']}")
+    
+    pdf.set_font("Arial", '', 11)
+    pdf.cell(w_full, 6, f"HP: {data['customer_phone']}", 0, 1)
+    
     pdf.ln(1)
+    pdf.set_font("Arial", '', 11) # Alamat Jelas
+    pdf.multi_cell(w_full, 5, f"{data['delivery_address']}")
     
-    pdf.set_font("Arial", 'B', 9)
-    pdf.cell(72, 5, "DARI (PENGIRIM):", 0, 1)
-    pdf.set_font("Arial", '', 9)
-    pdf.cell(15, 4, "Sales", 0, 0)
-    pdf.cell(57, 4, f": {data['sales_name']} ({data['branch']})", 0, 1)
-    pdf.cell(15, 4, "Kontak", 0, 0)
-    pdf.cell(57, 4, f": {data.get('sales_phone', '-')}", 0, 1)
+    draw_line()
     
-    pdf.cell(72, 2, "-"*45, 0, 1, 'C')
+    # 4. PENGIRIM
+    pdf.set_font("Arial", 'B', 11)
+    pdf.cell(w_full, 6, "PENGIRIM (SALES):", 0, 1)
+    pdf.set_font("Arial", '', 10)
+    pdf.cell(15, 5, "Nama", 0, 0)
+    pdf.cell(57, 5, f": {data['sales_name']} ({data['branch']})", 0, 1)
+    pdf.cell(15, 5, "WA", 0, 0)
+    pdf.cell(57, 5, f": {data.get('sales_phone', '-')}", 0, 1)
     
-    # 4. DETAIL BARANG
-    pdf.set_font("Arial", 'B', 9)
-    pdf.cell(72, 6, "Rincian Barang:", 0, 1)
-    pdf.set_font("Courier", 'B', 9) 
-    pdf.multi_cell(72, 4, f"> {data['product_name']}")
+    draw_line()
     
-    pdf.set_font("Courier", '', 8)
-    pdf.cell(22, 4, "Pengiriman", 0, 0)
-    pdf.cell(50, 4, f": {data['delivery_type']}", 0, 1)
+    # 5. BARANG (Paling Penting)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(w_full, 8, "BARANG:", 0, 1)
+    
+    pdf.set_font("Arial", 'B', 11)
+    pdf.multi_cell(w_full, 6, f"• {data['product_name']}")
+    
+    pdf.ln(2)
+    pdf.set_font("Arial", '', 10)
+    pdf.cell(25, 5, "Tipe Kirim", 0, 0)
+    pdf.cell(47, 5, f": {data['delivery_type']}", 0, 1)
     
     if data.get('installation_opt') == "Ya - Vendor":
-        pdf.cell(22, 4, "Instalasi", 0, 0)
-        pdf.cell(50, 4, f": YA (Vendor)", 0, 1)
-        pdf.cell(22, 4, "Biaya Trans", 0, 0)
-        pdf.cell(50, 4, f": Rp {data.get('installation_fee', '-')}", 0, 1)
+        pdf.cell(25, 5, "Instalasi", 0, 0)
+        pdf.cell(47, 5, f": YA (Vendor)", 0, 1)
+        pdf.cell(25, 5, "Biaya", 0, 0)
+        pdf.cell(47, 5, f": Rp {data.get('installation_fee', '-')}", 0, 1)
     
-    pdf.ln(2)
-    pdf.cell(72, 2, "-"*45, 0, 1, 'C')
+    draw_line()
     
-    # 5. TANDA TANGAN
-    pdf.ln(3)
-    y_pos = pdf.get_y()
+    # 6. TANDA TANGAN (Luas)
+    pdf.ln(5)
+    y_start = pdf.get_y()
+    col_w = 36
     
-    pdf.set_font("Arial", '', 8)
-    pdf.set_xy(4, y_pos)
-    pdf.cell(36, 4, "Hormat Kami,", 0, 0, 'C')
-    pdf.set_xy(40, y_pos)
-    pdf.cell(36, 4, "Penerima,", 0, 1, 'C')
+    pdf.set_font("Arial", '', 10)
+    pdf.set_xy(margin, y_start)
+    pdf.cell(col_w, 5, "Pengirim,", 0, 0, 'C')
+    pdf.set_xy(margin + col_w, y_start)
+    pdf.cell(col_w, 5, "Penerima,", 0, 1, 'C')
     
-    pdf.ln(15) 
+    pdf.ln(20) # Ruang TTD Besar (2cm)
     
-    y_line = pdf.get_y()
-    pdf.set_xy(4, y_line)
-    pdf.cell(36, 4, f"({data['sales_name']})", 0, 0, 'C')
-    pdf.set_xy(40, y_line)
-    pdf.cell(36, 4, "(....................)", 0, 1, 'C')
+    y_end = pdf.get_y()
+    pdf.set_font("Arial", 'B', 10)
+    pdf.set_xy(margin, y_end)
+    pdf.cell(col_w, 5, f"({data['sales_name']})", 0, 0, 'C')
+    pdf.set_xy(margin + col_w, y_end)
+    pdf.cell(col_w, 5, "(....................)", 0, 1, 'C')
     
-    pdf.ln(4)
+    pdf.ln(8)
     
-    # 6. QR CODE (Update 2.30: Teks Data)
-    # Berisi info teks yang bisa dibaca tanpa internet
-    qr_data = f"ORDER: {data['order_id']}\nCUSTOMER: {data['customer_name']}\nITEM: {data['product_name']}\nSTATUS: {data['status']}"
-    
+    # 7. QR CODE (Besar)
+    qr_data = f"ID:{data['order_id']}|{data['customer_name']}|{data['status']}"
     qr = qrcode.make(qr_data)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
         qr.save(tmp.name)
         tmp_path = tmp.name
-        
-    pdf.image(tmp_path, x=28, w=24) 
+    
+    # QR ditengah dan agak besar (30mm)
+    qr_x = margin + (w_full - 30) / 2
+    pdf.image(tmp_path, x=qr_x, w=30) 
     os.unlink(tmp_path)
     
-    pdf.set_font("Courier", '', 7)
-    pdf.cell(72, 4, "Scan untuk Info Order", 0, 1, 'C')
+    pdf.ln(2)
+    pdf.set_font("Arial", 'B', 10)
+    pdf.cell(w_full, 5, "SCAN UNTUK CEK STATUS", 0, 1, 'C')
     
     return pdf.output(dest='S').encode('latin-1')
 
@@ -223,7 +254,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.30 (Beta)**")
+    st.caption("🚀 **Versi 2.32 (Beta)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
