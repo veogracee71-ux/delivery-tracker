@@ -1,13 +1,9 @@
-# Versi 2.77 (Final Perfect)
-# Status: Stabil & Terverifikasi
-# Update: 
-# 1. FIX TIMEZONE UPDATE: Memastikan default jam di menu "Update Status" sudah WIB (+7).
-# 2. VERIFIKASI FITUR: 
-#    - Notifikasi Sukses Persisten (Ada)
-#    - Input Form Dinamis (Ada)
-#    - Tracking BES Scrollable (Ada)
-#    - PDF Struk Center & Bersih (Ada)
-#    - Excel Report Rapi (Ada)
+# Versi 2.78 (Customer Service Friendly)
+# Status: Stabil
+# Update: Meningkatkan tampilan halaman "Lacak Paket" (Customer) dengan menambahkan:
+# 1. Informasi Sales & Tombol Chat WA Sales (Solusi jika ada kendala).
+# 2. Detail Alamat Pengiriman (Verifikasi tujuan).
+# 3. Pengelompokan informasi yang lebih rapi.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -138,7 +134,7 @@ def create_thermal_pdf(data, print_timestamp):
         pdf.cell(47, 5, f": Rp {safe_text(data.get('installation_fee', '-'))}", 0, 1)
     draw_line()
     
-    # TTD (Sales & Penerima)
+    # TTD
     pdf.ln(5)
     y_start = pdf.get_y()
     col_w = 36
@@ -180,7 +176,6 @@ def process_sales_submit():
     st.session_state['sales_error'] = None
     s = st.session_state
     
-    # Ambil data
     in_id = s.get("in_id", "").strip()
     in_sales = s.get("in_sales", "")
     in_sales_hp = s.get("in_sales_hp", "")
@@ -191,22 +186,15 @@ def process_sales_submit():
     in_tipe = s.get("in_tipe", "Reguler")
     branch = s.get("user_branch", "")
     
-    # Logika Data Dinamis
     in_old_item = s.get("in_barang_lama", "") if in_tipe == "Tukar Tambah" else ""
     in_inst = s.get("in_instalasi", "Tidak")
     in_fee = s.get("in_biaya_inst", "") if in_inst == "Ya - Vendor" else ""
     
-    # Waktu WIB (+7 Jam dari Server)
     TIME_OFFSET = timedelta(hours=7) 
     current_time_wib = datetime.utcnow() + TIME_OFFSET 
 
-    # Validasi
     if not (in_id and in_sales and in_nama and in_barang):
         st.session_state['sales_error'] = "⚠️ Data wajib belum lengkap (ID, Sales, Customer, Barang)."
-        return
-
-    if in_tipe == "Tukar Tambah" and not in_old_item:
-        st.session_state['sales_error'] = "⚠️ Anda memilih Tukar Tambah. Harap isi Detail Barang Lama!"
         return
 
     try:
@@ -226,9 +214,8 @@ def process_sales_submit():
         st.session_state['sales_success'] = True
         st.session_state['sales_last_id'] = in_id
         
-        # Reset Data Input
         for k in ["in_id", "in_sales", "in_sales_hp", "in_nama", "in_hp", "in_alamat", "in_barang", "in_biaya_inst", "in_barang_lama"]:
-            if k in st.session_state: st.session_state[k] = ""
+            st.session_state[k] = ""
         st.session_state["in_tipe"] = "Reguler"
         st.session_state["in_instalasi"] = "Tidak"
         
@@ -257,10 +244,8 @@ def process_admin_update(oid):
     
     try:
         supabase.table("shipments").update(upd).eq("order_id", oid).execute()
-        # NOTIFIKASI SUKSES (Persistent & Toast)
         st.toast("Data Terupdate!", icon="✅")
-        st.session_state['admin_success_msg'] = f"✅ Order {oid} berhasil diupdate!"
-        st.session_state["upd_sel"] = None # Tutup Form
+        st.session_state["upd_sel"] = None
     except Exception as e:
         st.toast(f"Error: {e}", icon="❌")
 
@@ -285,15 +270,12 @@ if st.session_state['user_role'] == "Guest":
 elif st.session_state['user_role'] == "Sales":
     menu_options = ["📊 Dashboard Monitoring", "📝 Input Delivery Order", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "SPV":
-    # SPV: Tidak ada Input (Optimized Role)
     menu_options = ["📊 Dashboard Monitoring", "⚙️ Update Status (SPV)", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "Admin":
-    # Admin: Tidak ada Input (Optimized Role)
     menu_options = ["📊 Dashboard Monitoring", "⚙️ Update Status (Admin)", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
 
 menu = st.sidebar.radio("Menu Aplikasi", menu_options)
 
-# --- FOOTER ---
 with st.sidebar:
     st.divider()
     if st.session_state['user_role'] != "Guest":
@@ -303,11 +285,11 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.77 (Final Perfect)**")
+    st.caption("🚀 **Versi 2.78 (CS Friendly)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
-# HALAMAN 1: CEK RESI (LANDING PAGE)
+# HALAMAN 1: CEK RESI (PUBLIC & CUSTOMER FRIENDLY)
 # ==========================================
 if menu == "🔍 Cek Resi (Public)":
     st.title("🔍 Lacak Pengiriman")
@@ -323,38 +305,55 @@ if menu == "🔍 Cek Resi (Public)":
                 res = supabase.table("shipments").select("*").or_(f"order_id.eq.{q},customer_name.ilike.%{q}%").execute()
                 if res.data:
                     for d in res.data:
+                        # Box Status Utama
                         col = get_status_color(d['status'])
-                        if col=="success": st.success(f"Status: {d['status']}", icon="✅")
-                        elif col=="info": st.info(f"Status: {d['status']}", icon="🚚")
-                        else: st.warning(f"Status: {d['status']}", icon="⏳")
+                        if col=="success": st.success(f"Status Terkini: {d['status']}", icon="✅")
+                        elif col=="info": st.info(f"Status Terkini: {d['status']}", icon="🚚")
+                        else: st.warning(f"Status Terkini: {d['status']}", icon="⏳")
                         
                         tgl = d.get('last_updated') or d['created_at']
-                        install_info = ""
-                        if d.get('installation_opt') == "Ya - Vendor":
-                            install_info = f"* 🔧 **Instalasi:** Ya (Vendor) - Biaya: {d.get('installation_fee')}"
                         
-                        old_item_info = ""
-                        if d.get('delivery_type') == "Tukar Tambah" and d.get('old_product_name'):
-                            old_item_info = f"* 🔄 **Tukar Tambah:** {d.get('old_product_name')}"
+                        # Layout Rapi 2 Kolom
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            st.markdown(f"""
+                            **📦 Detail Barang:**
+                            * Produk: **{d['product_name']}**
+                            * Tipe: {d.get('delivery_type','-')}
+                            * Customer: {d['customer_name']}
+                            * Alamat: {d.get('delivery_address', '-')[:50]}...
+                            """)
+                        with c2:
+                            st.markdown(f"""
+                            **🚚 Info Pengiriman:**
+                            * Cabang: {d.get('branch', '-')}
+                            * Kurir: **{d['courier'] or '-'}**
+                            * Resi/Plat: **{d['resi'] or '-'}**
+                            * Update: {tgl[:16].replace('T',' ')} WIB
+                            """)
+                        
+                        # Info Tambahan (Instalasi/Tukar Tambah)
+                        if d.get('installation_opt') == "Ya - Vendor":
+                             st.caption(f"🔧 Jasa Instalasi: Vendor (Biaya: {d.get('installation_fee')})")
+                        if d.get('delivery_type') == "Tukar Tambah":
+                             st.caption(f"🔄 Tukar Tambah: {d.get('old_product_name')}")
 
-                        st.markdown(f"""
-                        ### {d['product_name']}
-                        * 🏢 Cabang: **{d.get('branch', '-')}**
-                        * 👤 Customer: **{d['customer_name']}**
-                        * 🔢 Order ID: `{d['order_id']}`
-                        * 🚚 Kurir: {d['courier'] or '-'}
-                        * 🔖 Resi: {d['resi'] or '-'}
-                        {old_item_info}
-                        {install_info}
-                        * 🕒 **Update:** {tgl[:16].replace('T',' ')}
-                        """)
+                        # Tombol Bantuan (Call Sales)
+                        if d.get('sales_phone'):
+                            # Format nomor HP ke format WA (62...)
+                            hp_sales = d['sales_phone'].strip().replace("-","").replace(" ","")
+                            if hp_sales.startswith("0"): hp_sales = "62" + hp_sales[1:]
+                            
+                            st.link_button("💬 Hubungi Sales via WA (Bantuan)", f"https://wa.me/{hp_sales}")
+                        
                         st.divider()
                         
+                        # Fitur Tracking BES (Jika ada)
                         if d['resi'] and ("jalan" in str(d['status']).lower() or "kirim" in str(d['status']).lower()):
                              with st.expander("🌍 Lacak di Website PT. BES"):
                                 components.iframe("https://www.bes-paket.com/track-package", height=500, scrolling=True)
 
-                else: st.warning("Data tidak ditemukan.")
+                else: st.warning("Data tidak ditemukan. Mohon cek kembali Order ID Anda.")
             except: st.error("Terjadi kesalahan koneksi.")
 
 # ==========================================
@@ -385,6 +384,7 @@ elif menu == "🔐 Login Staff":
         with st.container(border=True):
             tp = st.radio("Pilih Tipe Akun:", ["Sales Cabang", "SPV Cabang", "Admin Pusat"], horizontal=True)
             st.divider()
+            
             if tp == "Sales Cabang":
                 cb = st.selectbox("Cabang:", list(SALES_CREDENTIALS.keys()))
                 pw = st.text_input("Password Sales:", type="password")
@@ -452,7 +452,7 @@ elif menu == "📊 Dashboard Monitoring":
     except Exception as e: st.error(str(e))
 
 # ==========================================
-# HALAMAN 4: INPUT ORDER (HANYA SALES - FORM DINAMIS)
+# HALAMAN 4: INPUT ORDER (HANYA SALES)
 # ==========================================
 elif menu == "📝 Input Delivery Order":
     if st.session_state['user_role'] != "Sales": st.error("Akses Ditolak."); st.stop()
@@ -468,7 +468,6 @@ elif menu == "📝 Input Delivery Order":
         if st.button("Selesai / Buat Baru"): st.session_state['sales_success'] = False; st.rerun()
     else:
         if st.session_state.get('sales_error'): st.error(st.session_state['sales_error'])
-        
         with st.container(border=True):
             st.subheader("1. Data Sales & Order")
             st.text_input("Order ID (Wajib)", key="in_id")
