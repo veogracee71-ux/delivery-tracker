@@ -1,8 +1,6 @@
-# Versi 2.79 (Clean Public & Format Currency)
-# Status: Stabil
-# Update:
-# 1. Menghapus tombol WA Sales di halaman Cek Resi (Public).
-# 2. Menambahkan formatter Uang (Titik Ribuan) pada PDF Struk untuk Biaya Transport.
+# Versi 2.77 (Final Verified)
+# Status: Production Ready (Stabil & Lengkap)
+# Update: Pengecekan final untuk memastikan semua fitur (PDF Center, Excel Rapi, Notif SPV, Tracking BES, Form Dinamis) berfungsi 100%.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -26,7 +24,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed" 
 )
 
-# --- LINK APLIKASI ---
+# --- LINK APLIKASI (Ganti setelah deploy) ---
 APP_BASE_URL = "https://delivery-tracker.streamlit.app" 
 
 # --- LOAD SECRETS ---
@@ -58,16 +56,12 @@ def create_thermal_pdf(data, print_timestamp):
         if not text: return "-"
         return str(text).encode('latin-1', 'replace').decode('latin-1')
 
-    # UPDATE 2.79: Helper Format Rupiah
+    # Format Rupiah
     def format_rupiah(value):
         try:
-            # Ambil hanya angka
-            clean_val = ''.join(filter(str.isdigit, str(value)))
-            if not clean_val: return "-"
-            # Format ribuan dengan titik
-            return "{:,.0f}".format(int(clean_val)).replace(",", ".")
-        except:
-            return safe_text(value)
+            val = int(''.join(filter(str.isdigit, str(value))))
+            return "{:,.0f}".format(val).replace(",", ".")
+        except: return safe_text(value)
 
     pdf = FPDF(orientation='P', unit='mm', format=(80, 250))
     pdf.add_page()
@@ -81,7 +75,7 @@ def create_thermal_pdf(data, print_timestamp):
         pdf.line(margin, y, margin + w_full, y)
         pdf.ln(2)
 
-    # HEADER
+    # HEADER (Center Absolute)
     pdf.set_font("Arial", 'B', 16)
     pdf.set_x(0)
     pdf.cell(80, 8, "SURAT JALAN", 0, 1, 'C')
@@ -135,14 +129,15 @@ def create_thermal_pdf(data, print_timestamp):
         pdf.set_font("Arial", 'I', 9)
         pdf.cell(25, 5, "Brg Lama", 0, 0)
         pdf.multi_cell(47, 5, f": {safe_text(data.get('old_product_name'))}")
+        pdf.set_font("Arial", '', 10)
 
     if data.get('installation_opt') == "Ya - Vendor":
         pdf.cell(25, 5, "Instalasi", 0, 0)
         pdf.cell(47, 5, f": YA (Vendor)", 0, 1)
         pdf.cell(25, 5, "Biaya", 0, 0)
-        # UPDATE 2.79: Pake Format Rupiah
-        formatted_fee = format_rupiah(data.get('installation_fee', '0'))
-        pdf.cell(47, 5, f": Rp {formatted_fee}", 0, 1)
+        # Format Rupiah
+        biaya = format_rupiah(data.get('installation_fee', '0'))
+        pdf.cell(47, 5, f": Rp {biaya}", 0, 1)
     draw_line()
     
     # TTD
@@ -163,7 +158,7 @@ def create_thermal_pdf(data, print_timestamp):
     pdf.cell(col_w, 5, f"({safe_text(data['customer_name'])})", 0, 1, 'C')
     pdf.ln(8)
     
-    # QR CODE
+    # QR CODE LINK
     qr_url = f"{APP_BASE_URL}/?oid={data['order_id']}"
     qr = qrcode.make(qr_url)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
@@ -187,21 +182,30 @@ def process_sales_submit():
     st.session_state['sales_error'] = None
     s = st.session_state
     
-    in_id, in_sales = s.get("in_id", ""), s.get("in_sales", "")
-    in_sales_hp, in_nama = s.get("in_sales_hp", ""), s.get("in_nama", "")
-    in_hp, in_alamat = s.get("in_hp", ""), s.get("in_alamat", "")
-    in_barang, in_tipe = s.get("in_barang", ""), s.get("in_tipe", "Reguler")
+    in_id = s.get("in_id", "").strip()
+    in_sales = s.get("in_sales", "")
+    in_sales_hp = s.get("in_sales_hp", "")
+    in_nama = s.get("in_nama", "")
+    in_hp = s.get("in_hp", "")
+    in_alamat = s.get("in_alamat", "")
+    in_barang = s.get("in_barang", "")
+    in_tipe = s.get("in_tipe", "Reguler")
     branch = s.get("user_branch", "")
     
     in_old_item = s.get("in_barang_lama", "") if in_tipe == "Tukar Tambah" else ""
     in_inst = s.get("in_instalasi", "Tidak")
     in_fee = s.get("in_biaya_inst", "") if in_inst == "Ya - Vendor" else ""
     
+    # Waktu WIB (+7)
     TIME_OFFSET = timedelta(hours=7) 
     current_time_wib = datetime.utcnow() + TIME_OFFSET 
 
     if not (in_id and in_sales and in_nama and in_barang):
-        st.session_state['sales_error'] = "⚠️ Data wajib belum lengkap (ID, Sales, Customer, Barang)."
+        st.session_state['sales_error'] = "⚠️ Data wajib belum lengkap."
+        return
+
+    if in_tipe == "Tukar Tambah" and not in_old_item:
+        st.session_state['sales_error'] = "⚠️ Tukar Tambah wajib isi detail Barang Lama!"
         return
 
     try:
@@ -221,6 +225,7 @@ def process_sales_submit():
         st.session_state['sales_success'] = True
         st.session_state['sales_last_id'] = in_id
         
+        # Reset Input
         for k in ["in_id", "in_sales", "in_sales_hp", "in_nama", "in_hp", "in_alamat", "in_barang", "in_biaya_inst", "in_barang_lama"]:
             st.session_state[k] = ""
         st.session_state["in_tipe"] = "Reguler"
@@ -248,9 +253,9 @@ def process_admin_update(oid):
         "status": new_stat, "courier": new_kurir, "resi": new_resi,
         "last_updated": final_dt, "customer_name": corr_nama, "product_name": corr_barang
     }
-    
     try:
         supabase.table("shipments").update(upd).eq("order_id", oid).execute()
+        st.success("✅ Data Berhasil Diupdate!") # NOTIFIKASI SUKSES PERSISTEN
         st.toast("Data Terupdate!", icon="✅")
         st.session_state["upd_sel"] = None
     except Exception as e:
@@ -283,7 +288,6 @@ elif st.session_state['user_role'] == "Admin":
 
 menu = st.sidebar.radio("Menu Aplikasi", menu_options)
 
-# --- FOOTER ---
 with st.sidebar:
     st.divider()
     if st.session_state['user_role'] != "Guest":
@@ -293,11 +297,11 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.79 (Clean)**")
+    st.caption("🚀 **Versi 2.77 (Final Verified)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
-# HALAMAN 1: CEK RESI (PUBLIC & CUSTOMER FRIENDLY)
+# HALAMAN 1: CEK RESI
 # ==========================================
 if menu == "🔍 Cek Resi (Public)":
     st.title("🔍 Lacak Pengiriman")
@@ -319,47 +323,33 @@ if menu == "🔍 Cek Resi (Public)":
                         else: st.warning(f"Status Terkini: {d['status']}", icon="⏳")
                         
                         tgl = d.get('last_updated') or d['created_at']
-                        
-                        c1, c2 = st.columns(2)
-                        with c1:
-                            st.markdown(f"""
-                            **📦 Detail Barang:**
-                            * Produk: **{d['product_name']}**
-                            * Tipe: {d.get('delivery_type','-')}
-                            * Customer: {d['customer_name']}
-                            * Alamat: {d.get('delivery_address', '-')[:50]}...
-                            """)
-                        with c2:
-                            st.markdown(f"""
-                            **🚚 Info Pengiriman:**
-                            * Cabang: {d.get('branch', '-')}
-                            * Kurir: **{d['courier'] or '-'}**
-                            * Resi/Plat: **{d['resi'] or '-'}**
-                            * Update: {tgl[:16].replace('T',' ')} WIB
-                            """)
-                        
+                        install_info = ""
                         if d.get('installation_opt') == "Ya - Vendor":
-                             st.caption(f"🔧 Jasa Instalasi: Vendor (Biaya: {d.get('installation_fee')})")
-                        if d.get('delivery_type') == "Tukar Tambah":
-                             st.caption(f"🔄 Tukar Tambah: {d.get('old_product_name')}")
-
-                        # UPDATE 2.79: Tombol WA HAPUS (Tidak ada kode st.link_button disini)
+                            install_info = f"* 🔧 **Instalasi:** Ya (Vendor) - Biaya: {d.get('installation_fee')}"
                         
+                        st.markdown(f"""
+                        ### {d['product_name']}
+                        * 🏢 Cabang: **{d.get('branch', '-')}**
+                        * 👤 Customer: **{d['customer_name']}**
+                        * 🔢 Order ID: `{d['order_id']}`
+                        * 🚚 Kurir: {d['courier'] or '-'}
+                        * 🔖 Resi: {d['resi'] or '-'}
+                        {install_info}
+                        * 🕒 **Update:** {tgl[:16].replace('T',' ')}
+                        """)
                         st.divider()
                         
                         if d['resi'] and ("jalan" in str(d['status']).lower() or "kirim" in str(d['status']).lower()):
                              with st.expander("🌍 Lacak di Website PT. BES"):
                                 components.iframe("https://www.bes-paket.com/track-package", height=500, scrolling=True)
-
-                else: st.warning("Data tidak ditemukan. Mohon cek kembali Order ID Anda.")
-            except: st.error("Terjadi kesalahan koneksi.")
+                else: st.warning("Data tidak ditemukan.")
+            except: st.error("Kesalahan koneksi.")
 
 # ==========================================
 # HALAMAN 2: LOGIN
 # ==========================================
 elif menu == "🔐 Login Staff":
     st.title("🔐 Login Staff & Admin")
-    
     if not st.session_state.get("gate_unlocked"):
         c_pin1, c_pin2, c_pin3 = st.columns([1,2,1])
         with c_pin2:
@@ -367,22 +357,16 @@ elif menu == "🔐 Login Staff":
             gate_pin = st.text_input("Kode Akses:", type="password", key="gate_pin")
             if st.button("Buka Akses"):
                 if gate_pin == GATEKEEPER_PASSWORD:
-                    st.session_state["gate_unlocked"] = True
-                    st.toast("Akses Diterima.", icon="🔓")
-                    time.sleep(0.5)
-                    st.rerun()
-                else:
-                    st.error("Kode Akses Salah.")
+                    st.session_state["gate_unlocked"] = True; st.rerun()
+                else: st.error("Kode Salah.")
         st.stop()
     
     st.success("Akses Terbuka. Silakan Login.")
-    
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         with st.container(border=True):
             tp = st.radio("Pilih Tipe Akun:", ["Sales Cabang", "SPV Cabang", "Admin Pusat"], horizontal=True)
             st.divider()
-            
             if tp == "Sales Cabang":
                 cb = st.selectbox("Cabang:", list(SALES_CREDENTIALS.keys()))
                 pw = st.text_input("Password Sales:", type="password")
@@ -410,7 +394,9 @@ elif menu == "📊 Dashboard Monitoring":
         res = supabase.table("shipments").select("*").execute()
         raw = res.data if res.data else []
         if st.session_state['user_role'] in ["Sales", "SPV"]:
-            filtered = [d for d in raw if d.get('branch') == st.session_state['user_branch']]
+            branch = st.session_state['user_branch']
+            st.info(f"📍 Data Cabang: **{branch}**")
+            filtered = [d for d in raw if d.get('branch') == branch]
         else:
             br_list = sorted(list(set([d['branch'] for d in raw if d.get('branch')])))
             br_list.insert(0, "Semua Cabang")
@@ -418,7 +404,7 @@ elif menu == "📊 Dashboard Monitoring":
             filtered = raw if sel_br == "Semua Cabang" else [d for d in raw if d.get('branch') == sel_br]
 
         if not filtered:
-            st.info("📍 Belum ada data pengiriman.")
+            st.info("Belum ada data pengiriman.")
         else:
             p_conf = [x for x in filtered if str(x.get('status','')).strip() == "Menunggu Konfirmasi"]
             if p_conf and st.session_state['user_role'] in ["SPV", "Admin"]:
@@ -459,7 +445,7 @@ elif menu == "📝 Input Delivery Order":
     if st.session_state.get('sales_success'):
         st.success(f"✅ Order {st.session_state.get('sales_last_id')} Berhasil Disimpan!")
         b64 = st.session_state.get('sales_pdf_data')
-        st.markdown(f'<a href="data:application/pdf;base64,{b64}" download="SJ_{st.session_state.get("sales_last_id")}.pdf" style="text-decoration:none;"><button style="background-color:#0095DA;color:white;border:none;padding:12px;border-radius:8px;cursor:pointer;width:100%;font-weight:bold;">DOWNLOAD SURAT JALAN (PDF 80mm)</button></a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="data:application/pdf;base64,{b64}" download="SJ_{st.session_state.get("sales_last_id")}.pdf" style="text-decoration:none;"><button style="background-color:#0095DA;color:white;border:none;padding:12px;border-radius:8px;cursor:pointer;width:100%;">DOWNLOAD SURAT JALAN (PDF 80mm)</button></a>', unsafe_allow_html=True)
         st.divider()
         if st.button("Selesai / Buat Baru"): st.session_state['sales_success'] = False; st.rerun()
     else:
@@ -479,7 +465,7 @@ elif menu == "📝 Input Delivery Order":
             st.text_area("Alamat Pengiriman", key="in_alamat")
             st.divider()
 
-            st.subheader("3. Detail Barang & Layanan")
+            st.subheader("3. Detail Barang")
             c5, c6 = st.columns(2)
             c5.text_input("Nama Barang", key="in_barang")
             tp = st.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"], key="in_tipe")
@@ -500,10 +486,6 @@ elif menu == "📝 Input Delivery Order":
 # ==========================================
 elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SPV)":
     st.title("⚙️ Validasi Order")
-    if "admin_success_msg" in st.session_state:
-        st.success(st.session_state["admin_success_msg"])
-        del st.session_state["admin_success_msg"]
-
     q = supabase.table("shipments").select("*").order("created_at", desc=True).limit(50)
     if st.session_state['user_role'] == "SPV": q = q.eq("branch", st.session_state['user_branch'])
     res = q.execute()
