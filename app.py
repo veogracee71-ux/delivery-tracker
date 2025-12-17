@@ -1,7 +1,8 @@
-# Versi 2.59 (Fix Excel Format)
+# Versi 2.60 (Fix Tampilan Dashboard)
 # Status: Stabil
-# Update: FIX BUG FORMAT WAKTU DI EXCEL. Mengkonversi kolom timestamp menjadi format string
-#         'DD/MM/YYYY HH:MM' sebelum export agar kolom tidak terlihat panjang dan berantakan.
+# Update: FIX BUG TAMPILAN DASHBOARD. 
+# 1. Kolom Dashboard (st.dataframe) diformat rapi (DD/MM/YYYY HH:MM).
+# 2. Kolom Dashboard dibatasi (esensial saja) untuk mencegah horizontal scrolling.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -290,7 +291,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.59 (Fix Excel)**")
+    st.caption("🚀 **Versi 2.60 (Fix Tampilan Dashboard)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -403,13 +404,15 @@ elif menu == "🔐 Login Staff":
                     else: st.error("Password Salah!")
 
 # ==========================================
-# HALAMAN 3: DASHBOARD
+# HALAMAN 3: DASHBOARD (FIX TAMPILAN)
 # ==========================================
 elif menu == "📊 Dashboard Monitoring":
     st.title("📊 Monitoring Operasional")
     try:
         res = supabase.table("shipments").select("*").execute()
         if res.data:
+            
+            # --- FILTERING DATA ---
             if st.session_state['user_role'] in ["Sales", "SPV"]:
                 branch = st.session_state['user_branch']
                 st.info(f"📍 Data Cabang: **{branch}**")
@@ -420,6 +423,7 @@ elif menu == "📊 Dashboard Monitoring":
                 sel_br = st.selectbox("Filter Cabang:", br_list)
                 filtered = res.data if sel_br == "Semua Cabang" else [d for d in res.data if d.get('branch') == sel_br]
 
+            # --- METRICS & STATUS LOGIC ---
             pending = [x for x in filtered if "selesai" not in x['status'].lower() and "dikirim" not in x['status'].lower() and "jalan" not in x['status'].lower() and "pengiriman" not in x['status'].lower()]
             shipping = [x for x in filtered if "dikirim" in x['status'].lower() or "jalan" in x['status'].lower() or "pengiriman" in x['status'].lower()]
             done = [x for x in filtered if "selesai" in x['status'].lower() or "diterima" in x['status'].lower()]
@@ -435,9 +439,35 @@ elif menu == "📊 Dashboard Monitoring":
             c3.metric("✅ Selesai", f"{len(done)}")
             st.divider()
 
-            with st.expander(f"📦 Diproses Gudang ({len(pending)})", expanded=False): st.dataframe(pending, use_container_width=True)
-            with st.expander(f"🚚 Sedang Jalan ({len(shipping)})", expanded=False): st.dataframe(shipping, use_container_width=True)
-            with st.expander(f"✅ Selesai ({len(done)})", expanded=False): st.dataframe(done, use_container_width=True)
+            # --- FIX TAMPILAN DASHBOARD: FORMAT WAKTU & BATASI KOLOM ---
+            df_display_all = pd.DataFrame(filtered)
+            
+            # 1. Format Waktu agar rapi (DD/MM/YYYY HH:MM)
+            if 'last_updated' in df_display_all.columns:
+                df_display_all['last_updated'] = pd.to_datetime(df_display_all['last_updated'], errors='coerce').dt.strftime('%d/%m/%Y %H:%M')
+            if 'created_at' in df_display_all.columns:
+                df_display_all['created_at'] = pd.to_datetime(df_display_all['created_at'], errors='coerce').dt.strftime('%d/%m/%Y %H:%M')
+
+            # 2. Tentukan Kolom Esensial
+            display_cols = ['order_id', 'customer_name', 'product_name', 'status', 'last_updated', 'delivery_type']
+            if st.session_state['user_role'] == "Admin" and sel_br == "Semua Cabang":
+                 display_cols.insert(3, 'branch')
+            
+            final_display_cols = [col for col in display_cols if col in df_display_all.columns]
+
+            # 3. Filter DataFrame untuk Display
+            pending_ids = [d['order_id'] for d in pending]
+            shipping_ids = [d['order_id'] for d in shipping]
+            done_ids = [d['order_id'] for d in done]
+
+            df_pending_display = df_display_all[df_display_all['order_id'].isin(pending_ids)][final_display_cols]
+            df_shipping_display = df_display_all[df_display_all['order_id'].isin(shipping_ids)][final_display_cols]
+            df_done_display = df_display_all[df_display_all['order_id'].isin(done_ids)][final_display_cols]
+
+            # 4. Render Hasil
+            with st.expander(f"📦 Diproses Gudang ({len(pending)})", expanded=False): st.dataframe(df_pending_display, use_container_width=True)
+            with st.expander(f"🚚 Sedang Jalan ({len(shipping)})", expanded=False): st.dataframe(df_shipping_display, use_container_width=True)
+            with st.expander(f"✅ Selesai ({len(done)})", expanded=False): st.dataframe(df_done_display, use_container_width=True)
         else: st.info("Data kosong.")
     except Exception as e: st.error(str(e))
 
@@ -573,7 +603,6 @@ elif menu == "🗄️ Manajemen Data":
                 df['last_updated'] = pd.to_datetime(df['last_updated'], errors='coerce')
             
             # 2. Format menjadi string rapi (DD/MM/YYYY HH:MM)
-            # Karena kita menggunakan TIMESTAMP WITHOUT TIME ZONE (WIB), ini sudah aman.
             if 'created_at' in df.columns:
                 df['created_at'] = df['created_at'].dt.strftime('%d/%m/%Y %H:%M')
             if 'last_updated' in df.columns:
