@@ -4,5 +4,3 @@ fpdf
 qrcode
 pandas
 xlsxwriter
-streamlit-option-menu
-streamlit-antd-components
