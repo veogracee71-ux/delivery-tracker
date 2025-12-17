@@ -1,8 +1,7 @@
-# Versi 2.29
+# Versi 2.30
 # Update:
-# 1. Menghapus catatan "janji manis" di struk PDF.
-# 2. Mengubah QR Code menjadi Link URL agar Customer bisa tracking real-time.
-# 3. Menambahkan logika 'Auto-Fill' di halaman Cek Resi saat QR discan.
+# 1. Menghapus Header Toko & Slogan di PDF Struk (Langsung Surat Jalan).
+# 2. Mengubah isi QR Code menjadi TEXT DATA (Info Order) agar pasti bisa discan (tidak error link not found).
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -24,10 +23,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed" 
 )
 
-# --- KONFIGURASI URL APLIKASI (PENTING UNTUK QR CODE) ---
-# Ganti link ini dengan link aplikasi Streamlit Bapak yang asli setelah deploy
-APP_BASE_URL = "https://delivery-tracker-app.streamlit.app" 
-
 # --- LOAD SECRETS ---
 try:
     url = st.secrets["SUPABASE_URL"]
@@ -48,21 +43,15 @@ def get_status_color(status):
     elif "dikirim" in s or "jalan" in s: return "info"
     else: return "warning"
 
-# --- FUNGSI CETAK PDF (UPDATE 2.29) ---
+# --- FUNGSI CETAK PDF (UPDATE 2.30) ---
 def create_thermal_pdf(data):
-    pdf = FPDF(orientation='P', unit='mm', format=(80, 200))
+    pdf = FPDF(orientation='P', unit='mm', format=(80, 180))
     pdf.add_page()
     pdf.set_margins(4, 4, 4) 
     
-    # 1. HEADER
+    # 1. HEADER (Update: Hapus Nama Toko, Langsung Judul)
     pdf.set_font("Arial", 'B', 12)
-    pdf.cell(72, 5, "BLIBLI ELEKTRONIK", 0, 1, 'C')
-    pdf.set_font("Arial", '', 8)
-    pdf.cell(72, 4, "Solusi Belanja Elektronik", 0, 1, 'C')
-    pdf.ln(2)
-    
-    pdf.set_font("Arial", 'B', 11)
-    pdf.cell(72, 6, "SURAT JALAN", 1, 1, 'C')
+    pdf.cell(72, 6, "SURAT JALAN", 1, 1, 'C') # Langsung Judul
     pdf.ln(2)
     
     # 2. INFO TRANSAKSI
@@ -110,9 +99,7 @@ def create_thermal_pdf(data):
         pdf.cell(22, 4, "Biaya Trans", 0, 0)
         pdf.cell(50, 4, f": Rp {data.get('installation_fee', '-')}", 0, 1)
     
-    # Update 2.29: Menghapus catatan "Barang telah diperiksa..." (Janji Manis dihapus)
     pdf.ln(2)
-    
     pdf.cell(72, 2, "-"*45, 0, 1, 'C')
     
     # 5. TANDA TANGAN
@@ -135,12 +122,11 @@ def create_thermal_pdf(data):
     
     pdf.ln(4)
     
-    # 6. QR CODE (LINK TRACKING) - Update 2.29
-    # QR Code sekarang berisi Link URL, bukan text biasa
-    # Format: https://aplikasi.com/?oid=12345
-    qr_url = f"{APP_BASE_URL}/?oid={data['order_id']}"
+    # 6. QR CODE (Update 2.30: Teks Data)
+    # Berisi info teks yang bisa dibaca tanpa internet
+    qr_data = f"ORDER: {data['order_id']}\nCUSTOMER: {data['customer_name']}\nITEM: {data['product_name']}\nSTATUS: {data['status']}"
     
-    qr = qrcode.make(qr_url)
+    qr = qrcode.make(qr_data)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
         qr.save(tmp.name)
         tmp_path = tmp.name
@@ -149,7 +135,7 @@ def create_thermal_pdf(data):
     os.unlink(tmp_path)
     
     pdf.set_font("Courier", '', 7)
-    pdf.cell(72, 4, "Scan untuk Lacak Posisi Barang", 0, 1, 'C')
+    pdf.cell(72, 4, "Scan untuk Info Order", 0, 1, 'C')
     
     return pdf.output(dest='S').encode('latin-1')
 
@@ -237,7 +223,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.29 (Beta)**")
+    st.caption("🚀 **Versi 2.30 (Beta)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -358,20 +344,13 @@ elif menu == "📝 Input Delivery Order":
 elif menu == "🔍 Cek Resi (Public)":
     st.title("🔍 Cek Resi")
     
-    # --- LOGIKA AUTO-FILL DARI QR CODE ---
-    # Jika ada parameter '?oid=123' di URL, otomatis isi kolom pencarian
     default_oid = ""
     try:
-        # Streamlit versi baru menggunakan st.query_params
         qp = st.query_params
-        if "oid" in qp:
-            default_oid = qp["oid"]
-    except:
-        pass # Abaikan jika error di versi lama
+        if "oid" in qp: default_oid = qp["oid"]
+    except: pass
 
     q = st.text_input("Order ID / Nama Customer:", value=default_oid)
-    
-    # Jika ada default_oid, tombol Lacak dianggap diklik otomatis
     auto_click = True if default_oid else False
 
     if st.button("Lacak") or q or auto_click:
@@ -386,8 +365,6 @@ elif menu == "🔍 Cek Resi (Public)":
                         else: st.warning(f"Status: {d['status']}", icon="⏳")
                         
                         tgl = d.get('last_updated') or d['created_at']
-                        
-                        # Info Instalasi di Cek Resi
                         install_info = ""
                         if d.get('installation_opt') == "Ya - Vendor":
                             install_info = f"* 🔧 **Instalasi:** Ya (Vendor) - Biaya: {d.get('installation_fee')}"
