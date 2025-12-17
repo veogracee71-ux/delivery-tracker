@@ -1,8 +1,8 @@
-# Versi 2.60 (Fix Tampilan Dashboard)
+# Versi 2.61 (Fix Final Tampilan Dashboard)
 # Status: Stabil
-# Update: FIX BUG TAMPILAN DASHBOARD. 
-# 1. Kolom Dashboard (st.dataframe) diformat rapi (DD/MM/YYYY HH:MM).
-# 2. Kolom Dashboard dibatasi (esensial saja) untuk mencegah horizontal scrolling.
+# Update: FIX FINAL BUG TAMPILAN WAKTU DASHBOARD. 
+# 1. Menggunakan formatting Pandas yang lebih defensif (menghilangkan mikrodetik) 
+#    agar kolom last_updated dan created_at tampil rapi di st.dataframe.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -291,7 +291,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.60 (Fix Tampilan Dashboard)**")
+    st.caption("🚀 **Versi 2.61 (Fix Tampilan Dashboard)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -442,11 +442,15 @@ elif menu == "📊 Dashboard Monitoring":
             # --- FIX TAMPILAN DASHBOARD: FORMAT WAKTU & BATASI KOLOM ---
             df_display_all = pd.DataFrame(filtered)
             
-            # 1. Format Waktu agar rapi (DD/MM/YYYY HH:MM)
-            if 'last_updated' in df_display_all.columns:
-                df_display_all['last_updated'] = pd.to_datetime(df_display_all['last_updated'], errors='coerce').dt.strftime('%d/%m/%Y %H:%M')
-            if 'created_at' in df_display_all.columns:
-                df_display_all['created_at'] = pd.to_datetime(df_display_all['created_at'], errors='coerce').dt.strftime('%d/%m/%Y %H:%M')
+            # 1. Konversi dan Format Waktu agar rapi (DD/MM/YYYY HH:MM)
+            date_format = '%d/%m/%Y %H:%M'
+            
+            for col in ['last_updated', 'created_at']:
+                if col in df_display_all.columns:
+                    # Convert to datetime, then round down to seconds to remove microseconds, then format to string
+                    df_display_all[col] = pd.to_datetime(df_display_all[col], errors='coerce').dt.floor('S').dt.strftime(date_format)
+                    # Replace NaN/NaT values which may occur if data is missing
+                    df_display_all[col] = df_display_all[col].fillna('-')
 
             # 2. Tentukan Kolom Esensial
             display_cols = ['order_id', 'customer_name', 'product_name', 'status', 'last_updated', 'delivery_type']
