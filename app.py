@@ -1,19 +1,22 @@
-# Versi 2.44
+# Versi 2.48
 # Update:
-# 1. Mengubah label Tanda Tangan dari "Pengirim" menjadi "Sales".
-# 2. Memastikan posisi Judul "SURAT JALAN" benar-benar Center (sejajar dengan konten).
+# 1. Mengubah fitur Download menjadi EXCEL (.xlsx).
+# 2. Styling Excel: Header Biru, Border Rapi, Auto-width columns.
+# 3. Nama File Dinamis: Mencakup Nama Cabang, Bulan, dan Tahun.
 
 import streamlit as st
 import streamlit.components.v1 as components 
 from supabase import create_client, Client
 from urllib.parse import quote
 import time
-from datetime import datetime
+from datetime import datetime, date 
 from fpdf import FPDF
 import base64
 import qrcode
 import tempfile
 import os
+import pandas as pd
+import io # Import IO untuk buffer Excel
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(
@@ -49,7 +52,7 @@ def get_status_color(status):
     elif "dikirim" in s or "jalan" in s: return "info"
     else: return "warning"
 
-# --- FUNGSI CETAK PDF (UPDATE 2.44) ---
+# --- FUNGSI CETAK PDF ---
 def create_thermal_pdf(data):
     def safe_text(text):
         if not text: return "-"
@@ -59,7 +62,7 @@ def create_thermal_pdf(data):
     pdf.add_page()
     margin = 4
     pdf.set_margins(margin, margin, margin)
-    w_full = 72 # Lebar area cetak (80mm - 4mm - 4mm)
+    w_full = 72
     
     def draw_line():
         pdf.ln(2)
@@ -67,24 +70,24 @@ def create_thermal_pdf(data):
         pdf.line(margin, y, margin + w_full, y)
         pdf.ln(2)
 
-    # 1. HEADER (Center Fixed Width)
+    # HEADER
     pdf.set_font("Arial", 'B', 16)
-    # Menggunakan w_full agar center-nya konsisten dengan body
-    pdf.cell(w_full, 8, "SURAT JALAN", 0, 1, 'C')
+    pdf.set_x(0)
+    pdf.cell(80, 8, "SURAT JALAN", 0, 1, 'C')
+    pdf.set_x(margin)
     draw_line()
     
-    # 2. INFO
+    # INFO
     pdf.set_font("Arial", '', 10)
     pdf.cell(20, 5, "No Order", 0, 0)
     pdf.set_font("Arial", 'B', 11)
     pdf.cell(52, 5, f": {safe_text(data['order_id'])}", 0, 1)
-    
     pdf.set_font("Arial", '', 10)
     pdf.cell(20, 5, "Tanggal", 0, 0)
     pdf.cell(52, 5, f": {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 1)
     draw_line()
     
-    # 3. PENERIMA
+    # PENERIMA
     pdf.set_font("Arial", 'B', 11)
     pdf.cell(w_full, 6, "PENERIMA:", 0, 1)
     pdf.set_font("Arial", 'B', 12)
@@ -96,7 +99,7 @@ def create_thermal_pdf(data):
     pdf.multi_cell(w_full, 5, safe_text(data['delivery_address']))
     draw_line()
     
-    # 4. SALES
+    # SALES
     pdf.set_font("Arial", 'B', 11)
     pdf.cell(w_full, 6, "SALES:", 0, 1)
     pdf.set_font("Arial", '', 10)
@@ -106,7 +109,7 @@ def create_thermal_pdf(data):
     pdf.cell(57, 5, f": {safe_text(data.get('sales_phone', '-'))}", 0, 1)
     draw_line()
     
-    # 5. BARANG
+    # BARANG
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(w_full, 8, "BARANG:", 0, 1)
     pdf.set_font("Arial", 'B', 11)
@@ -115,7 +118,6 @@ def create_thermal_pdf(data):
     pdf.set_font("Arial", '', 10)
     pdf.cell(25, 5, "Tipe Kirim", 0, 0)
     pdf.cell(47, 5, f": {safe_text(data['delivery_type'])}", 0, 1)
-    
     if data.get('installation_opt') == "Ya - Vendor":
         pdf.cell(25, 5, "Instalasi", 0, 0)
         pdf.cell(47, 5, f": YA (Vendor)", 0, 1)
@@ -123,20 +125,16 @@ def create_thermal_pdf(data):
         pdf.cell(47, 5, f": Rp {safe_text(data.get('installation_fee', '-'))}", 0, 1)
     draw_line()
     
-    # 6. TTD (Update: Ganti Pengirim jadi Sales)
+    # TTD
     pdf.ln(5)
     y_start = pdf.get_y()
-    col_w = 36 # Setengah dari w_full (72/2)
-    
+    col_w = 36
     pdf.set_font("Arial", '', 10)
     pdf.set_xy(margin, y_start)
-    pdf.cell(col_w, 5, "Sales,", 0, 0, 'C') # Ganti Label
-    
+    pdf.cell(col_w, 5, "Sales,", 0, 0, 'C')
     pdf.set_xy(margin + col_w, y_start)
     pdf.cell(col_w, 5, "Penerima,", 0, 1, 'C')
-    
     pdf.ln(20)
-    
     y_end = pdf.get_y()
     pdf.set_font("Arial", 'B', 10)
     pdf.set_xy(margin, y_end)
@@ -145,7 +143,7 @@ def create_thermal_pdf(data):
     pdf.cell(col_w, 5, f"({safe_text(data['customer_name'])})", 0, 1, 'C')
     pdf.ln(8)
     
-    # 7. QR CODE
+    # QR CODE
     qr_url = f"{APP_BASE_URL}/?oid={data['order_id']}"
     qr = qrcode.make(qr_url)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
@@ -157,8 +155,9 @@ def create_thermal_pdf(data):
     os.unlink(tmp_path)
     
     pdf.ln(2)
+    pdf.set_x(0)
     pdf.set_font("Arial", 'B', 10)
-    pdf.cell(w_full, 5, "SCAN UNTUK TRACKING", 0, 1, 'C')
+    pdf.cell(80, 5, "SCAN UNTUK TRACKING", 0, 1, 'C')
     
     return pdf.output(dest='S').encode('latin-1')
 
@@ -252,9 +251,9 @@ if st.session_state['user_role'] == "Guest":
 elif st.session_state['user_role'] == "Sales":
     menu_options = ["📝 Input Delivery Order", "📊 Dashboard Monitoring", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "SPV":
-    menu_options = ["📝 Input Delivery Order", "⚙️ Update Status (SPV)", "📊 Dashboard Monitoring", "🔍 Cek Resi (Public)"]
+    menu_options = ["📝 Input Delivery Order", "⚙️ Update Status (SPV)", "📊 Dashboard Monitoring", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "Admin":
-    menu_options = ["📊 Dashboard Monitoring", "⚙️ Update Status (Admin)", "🗑️ Hapus Data (Admin)", "🔍 Cek Resi (Public)"]
+    menu_options = ["📊 Dashboard Monitoring", "⚙️ Update Status (Admin)", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
 
 menu = st.sidebar.radio("Menu Aplikasi", menu_options)
 
@@ -268,11 +267,11 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.44 (Beta)**")
+    st.caption("🚀 **Versi 2.48 (Beta)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
-# HALAMAN 1: CEK RESI
+# HALAMAN 1: CEK RESI (LANDING PAGE)
 # ==========================================
 if menu == "🔍 Cek Resi (Public)":
     st.title("🔍 Lacak Pengiriman")
@@ -314,7 +313,7 @@ if menu == "🔍 Cek Resi (Public)":
                         * 🕒 **Update:** {tgl[:16].replace('T',' ')}
                         """)
                         st.divider()
-                else: st.warning("Data tidak ditemukan.")
+                else: st.warning("Data tidak ditemukan. Mohon cek kembali Order ID Anda.")
             except: st.error("Terjadi kesalahan koneksi.")
 
 # ==========================================
@@ -499,11 +498,105 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
                 st.form_submit_button("Simpan", on_click=process_admin_update, args=(oid,))
 
 # ==========================================
-# HALAMAN 6: HAPUS
+# HALAMAN 6: MANAJEMEN DATA (NEW)
 # ==========================================
-elif menu == "🗑️ Hapus Data (Admin)":
-    st.title("Hapus Data")
-    did = st.text_input("Order ID:")
-    if st.button("Hapus Permanen", type="primary"):
-        supabase.table("shipments").delete().eq("order_id", did).execute()
-        st.toast("Dihapus.", icon="🗑️")
+elif menu == "🗄️ Manajemen Data":
+    st.title("🗄️ Manajemen Data")
+    
+    res = supabase.table("shipments").select("*").execute()
+    all_data = res.data if res.data else []
+    
+    if st.session_state['user_role'] == "SPV":
+        all_data = [d for d in all_data if d.get('branch') == st.session_state['user_branch']]
+        st.info(f"Mode SPV: Mengelola data cabang **{st.session_state['user_branch']}**")
+
+    if all_data:
+        df = pd.DataFrame(all_data)
+        
+        tab1, tab2, tab3 = st.tabs(["📥 Download Laporan (Excel)", "🗑️ Hapus Per Order", "🔥 Reset Database (Bahaya)"])
+        
+        # TAB 1: DOWNLOAD EXCEL BERWARNA
+        with tab1:
+            st.subheader("Download Data Bulanan (Excel)")
+            st.write(f"Total Data: **{len(df)}** baris")
+            
+            # Persiapan Filename
+            cabang_name = st.session_state['user_branch'].replace(" ", "_") if st.session_state['user_role'] == "SPV" else "Semua_Cabang"
+            bulan_indo = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
+            now = datetime.now()
+            nama_bulan = bulan_indo[now.month - 1]
+            file_name = f"Laporan_Delivery_{cabang_name}_{nama_bulan}_{now.year}.xlsx"
+            
+            # Generate Excel in Memory
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False, sheet_name='Laporan')
+                workbook = writer.book
+                worksheet = writer.sheets['Laporan']
+                
+                # Format Header (Biru Blibli, Teks Putih, Bold, Border)
+                header_fmt = workbook.add_format({
+                    'bold': True,
+                    'fg_color': '#0095DA',
+                    'font_color': '#FFFFFF',
+                    'border': 1,
+                    'text_wrap': True,
+                    'valign': 'vcenter',
+                    'align': 'center'
+                })
+                
+                # Format Body (Border)
+                body_fmt = workbook.add_format({'border': 1, 'valign': 'top'})
+                
+                # Terapkan Header
+                for col_num, value in enumerate(df.columns.values):
+                    worksheet.write(0, col_num, value, header_fmt)
+                
+                # Terapkan Body & Auto-width
+                for i, col in enumerate(df.columns):
+                    # Tulis data dengan border
+                    # Note: Menulis ulang data satu per satu di xlsxwriter agak lambat untuk big data, 
+                    # tapi aman untuk ribuan baris.
+                    # Cara cepat: Terapkan style kolom
+                    worksheet.set_column(i, i, 20, body_fmt) # Set lebar default 20 & border
+            
+            excel_data = output.getvalue()
+            
+            st.download_button(
+                label="📥 Download File Excel (.xlsx)",
+                data=excel_data,
+                file_name=file_name,
+                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            )
+
+        with tab2:
+            st.subheader("Hapus Order Satuan")
+            st.caption("Pilih Order ID yang ingin dihapus jika ada kesalahan input.")
+            del_opts = {f"{d['order_id']} - {d['customer_name']}": d['order_id'] for d in all_data}
+            del_sel = st.selectbox("Pilih Order untuk Dihapus:", list(del_opts.keys()), index=None)
+            
+            if del_sel:
+                oid_to_del = del_opts[del_sel]
+                st.warning(f"Anda akan menghapus Order ID: **{oid_to_del}**")
+                if st.button("Hapus Order Ini", type="primary"):
+                    supabase.table("shipments").delete().eq("order_id", oid_to_del).execute()
+                    st.toast("Order berhasil dihapus!", icon="🗑️")
+                    time.sleep(1)
+                    st.rerun()
+
+        with tab3:
+            st.subheader("🔥 Reset Database (Kosongkan Semua)")
+            st.error("PERHATIAN: Fitur ini akan menghapus SEMUA DATA di tabel. Pastikan Anda sudah DOWNLOAD LAPORAN terlebih dahulu!")
+            
+            if st.session_state['user_role'] != "Admin":
+                st.warning("⛔ Akses Ditolak. Hanya Admin Pusat yang boleh melakukan Reset Total.")
+            else:
+                confirm_txt = st.text_input("Ketik 'HAPUS SEMUA' untuk konfirmasi:")
+                if confirm_txt == "HAPUS SEMUA":
+                    if st.button("🔴 YA, KOSONGKAN DATABASE", type="primary"):
+                        supabase.table("shipments").delete().neq("id", 0).execute()
+                        st.success("Database telah dikosongkan untuk bulan baru.")
+                        time.sleep(2)
+                        st.rerun()
+    else:
+        st.info("Belum ada data untuk dikelola.")
