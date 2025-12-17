@@ -1,14 +1,14 @@
-# Versi 2.55 (Stabil)
-# Status: Production Ready / Siap Pakai
-# Update: FIX BUG MENU PRIORITY. Memastikan "Dashboard Monitoring" menjadi menu default (paling atas) untuk Sales dan SPV.
+# Versi 2.56 (Fix Timezone)
+# Status: Stabil
+# Update: FIX BUG TIMEZONE. Menambahkan offset +7 jam (WIB) pada timestamp saat input order
+#         agar jam yang tercetak di Surat Jalan (PDF) sinkron dengan waktu lokal (Indonesia).
 
 import streamlit as st
 import streamlit.components.v1 as components 
 from supabase import create_client, Client
 from urllib.parse import quote
 import time
-from datetime import datetime, date 
-from fpdf import FPDF
+from datetime import datetime, date, timedelta # Tambah timedelta
 import base64
 import qrcode
 import tempfile
@@ -183,7 +183,9 @@ def process_sales_submit():
     in_inst = s.get("in_instalasi", "Tidak")
     in_fee = s.get("in_biaya_inst", "") if in_inst == "Ya - Vendor" else ""
     
-    current_time = datetime.now() # TANGKAP WAKTU SEKALI
+    # --- FIX TIMEZONE: TANGKAP WAKTU SEKALI DAN DI-OFFSET +7 JAM (WIB) ---
+    TIME_OFFSET = timedelta(hours=7) 
+    current_time_wib = datetime.utcnow() + TIME_OFFSET # Naive datetime di WIB
 
     # VALIDASI DASAR
     if not (in_id and in_sales and in_nama and in_barang):
@@ -201,13 +203,14 @@ def process_sales_submit():
             "delivery_address": in_alamat, "product_name": in_barang, "delivery_type": in_tipe,
             "sales_name": in_sales, "sales_phone": in_sales_hp, "branch": branch,
             "status": "Menunggu Konfirmasi", 
-            "last_updated": current_time.isoformat(),
+            "last_updated": current_time_wib.isoformat(), # Gunakan waktu WIB yang sudah di-fix
             "installation_opt": in_inst, "installation_fee": in_fee,
             "old_product_name": in_old_item
         }
         supabase.table("shipments").insert(payload).execute()
         
-        pdf_bytes = create_thermal_pdf(payload, current_time)
+        # Kirim payload dan WIB timestamp yang sama ke fungsi PDF
+        pdf_bytes = create_thermal_pdf(payload, current_time_wib)
         b64_pdf = base64.b64encode(pdf_bytes).decode('latin-1')
         
         st.session_state['sales_success'] = True
@@ -269,13 +272,10 @@ if 'user_branch' not in st.session_state: st.session_state['user_branch'] = ""
 if st.session_state['user_role'] == "Guest":
     menu_options = ["🔍 Cek Resi (Public)", "🔐 Login Staff"] 
 elif st.session_state['user_role'] == "Sales":
-    # FIX V2.55: Dashboard Monitoring paling atas
     menu_options = ["📊 Dashboard Monitoring", "📝 Input Delivery Order", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "SPV":
-    # FIX V2.55: Dashboard Monitoring paling atas
     menu_options = ["📊 Dashboard Monitoring", "📝 Input Delivery Order", "⚙️ Update Status (SPV)", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "Admin":
-    # Admin sudah benar Dashboard Monitoring paling atas
     menu_options = ["📊 Dashboard Monitoring", "⚙️ Update Status (Admin)", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
 
 menu = st.sidebar.radio("Menu Aplikasi", menu_options)
@@ -290,7 +290,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.55 (Stabil)**")
+    st.caption("🚀 **Versi 2.56 (Fix Sync)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -423,11 +423,6 @@ elif menu == "📊 Dashboard Monitoring":
             pending = [x for x in filtered if "selesai" not in x['status'].lower() and "dikirim" not in x['status'].lower() and "jalan" not in x['status'].lower() and "pengiriman" not in x['status'].lower()]
             shipping = [x for x in filtered if "dikirim" in x['status'].lower() or "jalan" in x['status'].lower() or "pengiriman" in x['status'].lower()]
             done = [x for x in filtered if "selesai" in x['status'].lower() or "diterima" in x['status'].lower()]
-            
-            # Badge Notifikasi
-            pending_confirmation = [x for x in filtered if x['status'] == "Menunggu Konfirmasi"]
-            if pending_confirmation and st.session_state['user_role'] in ["SPV", "Admin"]:
-                 st.error(f"🔔 PERHATIAN: Ada {len(pending_confirmation)} Order Baru Menunggu Konfirmasi!", icon="🔥")
 
             c1, c2, c3 = st.columns(3)
             c1.metric("📦 Diproses", f"{len(pending)}")
