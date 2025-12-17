@@ -1,6 +1,6 @@
 streamlit
 supabase
-pandas
-xlswriter
 fpdf
 qrcode
+pandas
+xlsxwriter
