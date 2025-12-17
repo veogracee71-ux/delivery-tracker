@@ -1,8 +1,7 @@
-# Versi 2.32
-# Update:
-# 1. LAYOUT STRUK JUMBO: Semua font diperbesar (Min 10pt) agar tegas dan jelas.
-# 2. Menghapus teks kecil/slogan/catatan kaki yang tidak perlu.
-# 3. Fokus pada keterbacaan (Readability) di kertas thermal.
+# Versi 2.33
+# Update: Fix Error Encoding 'Latin-1' pada PDF.
+# 1. Mengganti bullet point (•) dengan strip (-) agar kompatibel.
+# 2. Menambahkan fungsi 'safe_text' untuk membersihkan input user dari emoji/karakter asing agar PDF tidak crash.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -44,9 +43,15 @@ def get_status_color(status):
     elif "dikirim" in s or "jalan" in s: return "info"
     else: return "warning"
 
-# --- FUNGSI CETAK PDF (UPDATE 2.32 - FONT BESAR & TEGAS) ---
+# --- FUNGSI CETAK PDF (UPDATE 2.33 - FIX ENCODING) ---
 def create_thermal_pdf(data):
-    # Setup PDF: Lebar 80mm, Tinggi Auto (diset panjang biar aman)
+    # Fungsi untuk membersihkan teks dari karakter yang tidak didukung Latin-1 (seperti Emoji/Bullet)
+    def safe_text(text):
+        if not text: return "-"
+        # Encode ke latin-1 dengan 'replace' (karakter aneh jadi tanda tanya), lalu decode balik
+        return str(text).encode('latin-1', 'replace').decode('latin-1')
+
+    # Setup PDF: Lebar 80mm
     pdf = FPDF(orientation='P', unit='mm', format=(80, 250))
     pdf.add_page()
     
@@ -64,7 +69,7 @@ def create_thermal_pdf(data):
         pdf.ln(2)
 
     # 1. HEADER (Sangat Jelas)
-    pdf.set_font("Arial", 'B', 16) # Font Besar
+    pdf.set_font("Arial", 'B', 16)
     pdf.cell(w_full, 8, "BLIBLI ELEKTRONIK", 0, 1, 'C')
     
     pdf.set_font("Arial", 'B', 14)
@@ -74,28 +79,28 @@ def create_thermal_pdf(data):
     # 2. INFO TRANSAKSI (Tegas)
     pdf.set_font("Arial", '', 10)
     pdf.cell(20, 5, "No Order", 0, 0)
-    pdf.set_font("Arial", 'B', 11) # Order ID Besar
-    pdf.cell(52, 5, f": {data['order_id']}", 0, 1)
+    pdf.set_font("Arial", 'B', 11)
+    pdf.cell(52, 5, f": {safe_text(data['order_id'])}", 0, 1)
     
     pdf.set_font("Arial", '', 10)
     pdf.cell(20, 5, "Tanggal", 0, 0)
-    pdf.cell(52, 5, f": {datetime.now().strftime('%d/%m/%y %H:%M')}", 0, 1)
+    pdf.cell(52, 5, f": {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 1)
     
     draw_line()
     
-    # 3. PENERIMA (Fokus Alamat)
+    # 3. PENERIMA
     pdf.set_font("Arial", 'B', 11)
     pdf.cell(w_full, 6, "PENERIMA:", 0, 1)
     
-    pdf.set_font("Arial", 'B', 12) # Nama Customer Besar
-    pdf.multi_cell(w_full, 6, f"{data['customer_name']}")
+    pdf.set_font("Arial", 'B', 12)
+    pdf.multi_cell(w_full, 6, safe_text(data['customer_name']))
     
     pdf.set_font("Arial", '', 11)
-    pdf.cell(w_full, 6, f"HP: {data['customer_phone']}", 0, 1)
+    pdf.cell(w_full, 6, f"HP: {safe_text(data['customer_phone'])}", 0, 1)
     
     pdf.ln(1)
-    pdf.set_font("Arial", '', 11) # Alamat Jelas
-    pdf.multi_cell(w_full, 5, f"{data['delivery_address']}")
+    pdf.set_font("Arial", '', 11)
+    pdf.multi_cell(w_full, 5, safe_text(data['delivery_address']))
     
     draw_line()
     
@@ -104,33 +109,34 @@ def create_thermal_pdf(data):
     pdf.cell(w_full, 6, "PENGIRIM (SALES):", 0, 1)
     pdf.set_font("Arial", '', 10)
     pdf.cell(15, 5, "Nama", 0, 0)
-    pdf.cell(57, 5, f": {data['sales_name']} ({data['branch']})", 0, 1)
+    pdf.cell(57, 5, f": {safe_text(data['sales_name'])} ({safe_text(data['branch'])})", 0, 1)
     pdf.cell(15, 5, "WA", 0, 0)
-    pdf.cell(57, 5, f": {data.get('sales_phone', '-')}", 0, 1)
+    pdf.cell(57, 5, f": {safe_text(data.get('sales_phone', '-'))}", 0, 1)
     
     draw_line()
     
-    # 5. BARANG (Paling Penting)
+    # 5. BARANG
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(w_full, 8, "BARANG:", 0, 1)
     
     pdf.set_font("Arial", 'B', 11)
-    pdf.multi_cell(w_full, 6, f"• {data['product_name']}")
+    # FIX: Menggunakan safe_text dan tanda minus (-) pengganti bullet
+    pdf.multi_cell(w_full, 6, f"- {safe_text(data['product_name'])}")
     
     pdf.ln(2)
     pdf.set_font("Arial", '', 10)
     pdf.cell(25, 5, "Tipe Kirim", 0, 0)
-    pdf.cell(47, 5, f": {data['delivery_type']}", 0, 1)
+    pdf.cell(47, 5, f": {safe_text(data['delivery_type'])}", 0, 1)
     
     if data.get('installation_opt') == "Ya - Vendor":
         pdf.cell(25, 5, "Instalasi", 0, 0)
         pdf.cell(47, 5, f": YA (Vendor)", 0, 1)
         pdf.cell(25, 5, "Biaya", 0, 0)
-        pdf.cell(47, 5, f": Rp {data.get('installation_fee', '-')}", 0, 1)
+        pdf.cell(47, 5, f": Rp {safe_text(data.get('installation_fee', '-'))}", 0, 1)
     
     draw_line()
     
-    # 6. TANDA TANGAN (Luas)
+    # 6. TANDA TANGAN
     pdf.ln(5)
     y_start = pdf.get_y()
     col_w = 36
@@ -141,25 +147,24 @@ def create_thermal_pdf(data):
     pdf.set_xy(margin + col_w, y_start)
     pdf.cell(col_w, 5, "Penerima,", 0, 1, 'C')
     
-    pdf.ln(20) # Ruang TTD Besar (2cm)
+    pdf.ln(20)
     
     y_end = pdf.get_y()
     pdf.set_font("Arial", 'B', 10)
     pdf.set_xy(margin, y_end)
-    pdf.cell(col_w, 5, f"({data['sales_name']})", 0, 0, 'C')
+    pdf.cell(col_w, 5, f"({safe_text(data['sales_name'])})", 0, 0, 'C')
     pdf.set_xy(margin + col_w, y_end)
     pdf.cell(col_w, 5, "(....................)", 0, 1, 'C')
     
     pdf.ln(8)
     
-    # 7. QR CODE (Besar)
-    qr_data = f"ID:{data['order_id']}|{data['customer_name']}|{data['status']}"
-    qr = qrcode.make(qr_data)
+    # 7. QR CODE (Isi Text Safe)
+    qr_str = f"ID:{safe_text(data['order_id'])}\nCUST:{safe_text(data['customer_name'])}\nSTAT:{safe_text(data['status'])}"
+    qr = qrcode.make(qr_str)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
         qr.save(tmp.name)
         tmp_path = tmp.name
     
-    # QR ditengah dan agak besar (30mm)
     qr_x = margin + (w_full - 30) / 2
     pdf.image(tmp_path, x=qr_x, w=30) 
     os.unlink(tmp_path)
@@ -254,7 +259,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.32 (Beta)**")
+    st.caption("🚀 **Versi 2.33 (Beta)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
