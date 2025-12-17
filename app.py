@@ -1,8 +1,9 @@
-# Versi 2.52
+# Versi 2.53
 # Update:
-# 1. Menambahkan kolom Input "Barang Lama" khusus untuk Tipe Tukar Tambah.
-# 2. Validasi Wajib: Jika pilih Tukar Tambah, kolom Barang Lama harus diisi.
-# 3. Menampilkan Info Barang Lama di PDF Struk.
+# 1. Mengubah Form Input menjadi Dinamis (Interactive).
+# 2. Kolom "Barang Lama" HANYA MUNCUL jika pilih Tukar Tambah.
+# 3. Kolom "Biaya Transport" HANYA MUNCUL jika pilih Instalasi Vendor.
+# 4. Validasi Data lebih aman (Data hidden otomatis tidak disimpan).
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -52,7 +53,7 @@ def get_status_color(status):
     elif "dikirim" in s or "jalan" in s: return "info"
     else: return "warning"
 
-# --- FUNGSI CETAK PDF (UPDATE 2.52 - Info Tukar Tambah) ---
+# --- FUNGSI CETAK PDF ---
 def create_thermal_pdf(data):
     def safe_text(text):
         if not text: return "-"
@@ -70,14 +71,14 @@ def create_thermal_pdf(data):
         pdf.line(margin, y, margin + w_full, y)
         pdf.ln(2)
 
-    # 1. HEADER
+    # HEADER
     pdf.set_font("Arial", 'B', 16)
     pdf.set_x(0)
     pdf.cell(80, 8, "SURAT JALAN", 0, 1, 'C')
     pdf.set_x(margin)
     draw_line()
     
-    # 2. INFO
+    # INFO
     pdf.set_font("Arial", '', 10)
     pdf.cell(20, 5, "No Order", 0, 0)
     pdf.set_font("Arial", 'B', 11)
@@ -87,7 +88,7 @@ def create_thermal_pdf(data):
     pdf.cell(52, 5, f": {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 1)
     draw_line()
     
-    # 3. PENERIMA
+    # PENERIMA
     pdf.set_font("Arial", 'B', 11)
     pdf.cell(w_full, 6, "PENERIMA:", 0, 1)
     pdf.set_font("Arial", 'B', 12)
@@ -99,7 +100,7 @@ def create_thermal_pdf(data):
     pdf.multi_cell(w_full, 5, safe_text(data['delivery_address']))
     draw_line()
     
-    # 4. SALES
+    # SALES
     pdf.set_font("Arial", 'B', 11)
     pdf.cell(w_full, 6, "SALES:", 0, 1)
     pdf.set_font("Arial", '', 10)
@@ -109,23 +110,21 @@ def create_thermal_pdf(data):
     pdf.cell(57, 5, f": {safe_text(data.get('sales_phone', '-'))}", 0, 1)
     draw_line()
     
-    # 5. BARANG
+    # BARANG
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(w_full, 8, "BARANG:", 0, 1)
     pdf.set_font("Arial", 'B', 11)
     pdf.multi_cell(w_full, 6, f"- {safe_text(data['product_name'])}")
     pdf.ln(2)
-    
     pdf.set_font("Arial", '', 10)
     pdf.cell(25, 5, "Tipe Kirim", 0, 0)
     pdf.cell(47, 5, f": {safe_text(data['delivery_type'])}", 0, 1)
     
-    # Menampilkan Barang Lama jika Tukar Tambah
     if data['delivery_type'] == "Tukar Tambah" and data.get('old_product_name'):
         pdf.set_font("Arial", 'I', 9)
         pdf.cell(25, 5, "Brg Lama", 0, 0)
         pdf.multi_cell(47, 5, f": {safe_text(data.get('old_product_name'))}")
-        pdf.set_font("Arial", '', 10) # Reset font
+        pdf.set_font("Arial", '', 10)
 
     if data.get('installation_opt') == "Ya - Vendor":
         pdf.cell(25, 5, "Instalasi", 0, 0)
@@ -134,7 +133,7 @@ def create_thermal_pdf(data):
         pdf.cell(47, 5, f": Rp {safe_text(data.get('installation_fee', '-'))}", 0, 1)
     draw_line()
     
-    # 6. TTD
+    # TTD
     pdf.ln(5)
     y_start = pdf.get_y()
     col_w = 36
@@ -152,7 +151,7 @@ def create_thermal_pdf(data):
     pdf.cell(col_w, 5, f"({safe_text(data['customer_name'])})", 0, 1, 'C')
     pdf.ln(8)
     
-    # 7. QR CODE
+    # QR CODE
     qr_url = f"{APP_BASE_URL}/?oid={data['order_id']}"
     qr = qrcode.make(qr_url)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
@@ -180,18 +179,24 @@ def process_sales_submit():
     in_sales_hp, in_nama = s.get("in_sales_hp", ""), s.get("in_nama", "")
     in_hp, in_alamat = s.get("in_hp", ""), s.get("in_alamat", "")
     in_barang, in_tipe = s.get("in_barang", ""), s.get("in_tipe", "Reguler")
-    in_inst, in_fee = s.get("in_instalasi", "Tidak"), s.get("in_biaya_inst", "")
-    in_old_item = s.get("in_barang_lama", "") # Input Baru
     branch = s.get("user_branch", "")
+    
+    # LOGIKA KONDISIONAL (DATA CLEANING)
+    # Jika bukan tukar tambah, kosongkan data barang lama walau user iseng isi
+    in_old_item = s.get("in_barang_lama", "") if in_tipe == "Tukar Tambah" else ""
+    
+    in_inst = s.get("in_instalasi", "Tidak")
+    # Jika tidak instalasi, kosongkan biaya
+    in_fee = s.get("in_biaya_inst", "") if in_inst == "Ya - Vendor" else ""
 
     # VALIDASI DASAR
     if not (in_id and in_sales and in_nama and in_barang):
         st.session_state['sales_error'] = "⚠️ Data wajib belum lengkap (ID, Sales, Customer, Barang)."
         return
 
-    # VALIDASI TUKAR TAMBAH (Fitur Baru)
+    # VALIDASI TUKAR TAMBAH
     if in_tipe == "Tukar Tambah" and not in_old_item:
-        st.session_state['sales_error'] = "⚠️ Untuk Tipe Tukar Tambah, 'Detail Barang Lama' WAJIB diisi!"
+        st.session_state['sales_error'] = "⚠️ Anda memilih Tukar Tambah. Harap isi Detail Barang Lama!"
         return
 
     try:
@@ -201,7 +206,7 @@ def process_sales_submit():
             "sales_name": in_sales, "sales_phone": in_sales_hp, "branch": branch,
             "status": "Menunggu Konfirmasi", "last_updated": datetime.now().isoformat(),
             "installation_opt": in_inst, "installation_fee": in_fee,
-            "old_product_name": in_old_item # Simpan Barang Lama
+            "old_product_name": in_old_item
         }
         supabase.table("shipments").insert(payload).execute()
         
@@ -225,37 +230,13 @@ def process_sales_submit():
         else:
             st.session_state['sales_error'] = f"Error: {err_msg}"
 
-# --- CALLBACK ADMIN UPDATE ---
-def process_admin_update(oid):
-    new_stat = st.session_state.get(f"stat_{oid}")
-    new_kurir = st.session_state.get(f"kur_{oid}")
-    new_resi = st.session_state.get(f"res_{oid}")
-    d_date = st.session_state.get(f"date_{oid}")
-    d_time = st.session_state.get(f"time_{oid}")
-    corr_nama = st.session_state.get(f"cnama_{oid}")
-    corr_barang = st.session_state.get(f"cbar_{oid}")
-    
-    final_dt = datetime.combine(d_date, d_time).isoformat()
-    
-    upd = {
-        "status": new_stat, "courier": new_kurir, "resi": new_resi,
-        "last_updated": final_dt, "customer_name": corr_nama, "product_name": corr_barang
-    }
-    
-    try:
-        supabase.table("shipments").update(upd).eq("order_id", oid).execute()
-        st.toast("Data Terupdate!", icon="✅")
-        st.session_state["upd_sel"] = None
-    except Exception as e:
-        st.toast(f"Error: {e}", icon="❌")
-
 # --- CUSTOM CSS ---
 st.markdown("""
 <style>
     div.stButton > button { background-color: #0095DA !important; color: white !important; border: 1px solid #0095DA !important; font-weight: bold !important; }
     div.stButton > button:hover { background-color: #007AB8 !important; border-color: #007AB8 !important; color: white !important; }
-    div.stForm > div.stFormSubmitButton > button { background-color: #0095DA !important; color: white !important; border: none !important; }
-    [data-testid="stFormSubmitButton"] > button { background-color: #0095DA !important; color: white !important; border: none !important; } 
+    /* Menargetkan tombol di dalam container non-form */
+    button[kind="primary"] { background-color: #0095DA !important; color: white !important; border: none !important; }
     [data-testid="stLinkButton"] > a { background-color: #0095DA !important; color: white !important; border: 1px solid #0095DA !important; font-weight: bold !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -285,11 +266,11 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.52 (Beta)**")
+    st.caption("🚀 **Versi 2.53 (Beta)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
-# HALAMAN 1: CEK RESI (LANDING PAGE)
+# HALAMAN 1: CEK RESI
 # ==========================================
 if menu == "🔍 Cek Resi (Public)":
     st.title("🔍 Lacak Pengiriman")
@@ -320,7 +301,6 @@ if menu == "🔍 Cek Resi (Public)":
                         if d.get('installation_opt') == "Ya - Vendor":
                             install_info = f"* 🔧 **Instalasi:** Ya (Vendor) - Biaya: {d.get('installation_fee')}"
                         
-                        # Info Tukar Tambah di Cek Resi
                         old_item_info = ""
                         if d.get('delivery_type') == "Tukar Tambah" and d.get('old_product_name'):
                             old_item_info = f"* 🔄 **Tukar Tambah:** {d.get('old_product_name')}"
@@ -433,7 +413,7 @@ elif menu == "📊 Dashboard Monitoring":
     except Exception as e: st.error(str(e))
 
 # ==========================================
-# HALAMAN 4: INPUT ORDER
+# HALAMAN 4: INPUT ORDER (INTERAKTIF)
 # ==========================================
 elif menu == "📝 Input Delivery Order":
     st.title("📝 Input Delivery Order")
@@ -445,7 +425,6 @@ elif menu == "📝 Input Delivery Order":
         b64 = st.session_state.get('sales_pdf_data')
         
         st.markdown(f'<a href="data:application/pdf;base64,{b64}" download="SJ_{st.session_state.get("sales_last_id")}.pdf" style="text-decoration:none;"><button style="background-color:#0095DA;color:white;border:none;padding:10px;border-radius:5px;cursor:pointer;width:100%;">DOWNLOAD SURAT JALAN (PDF 80mm)</button></a>', unsafe_allow_html=True)
-        st.caption("*Silakan download sebelum buat order baru.*")
         st.divider()
         
         if st.button("Selesai / Buat Baru"):
@@ -454,8 +433,11 @@ elif menu == "📝 Input Delivery Order":
     
     if st.session_state.get('sales_error'): st.error(st.session_state['sales_error'])
 
+    # GANTI FORM JADI CONTAINER AGAR INTERAKTIF
     if not st.session_state.get('sales_success'):
-        with st.form("sales_form", clear_on_submit=False):
+        with st.container(border=True):
+            st.subheader("Data Pelanggan & Barang")
+            
             c1, c2 = st.columns(2)
             st.text_input("Order ID (Wajib)", key="in_id")
             
@@ -471,16 +453,25 @@ elif menu == "📝 Input Delivery Order":
             st.markdown("**Detail Barang**")
             c5, c6 = st.columns(2)
             st.text_input("Nama Barang", key="in_barang")
-            st.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"], key="in_tipe")
+            # Interaktif: Pilihan akan mereload halaman (default behavior container)
+            sel_tipe = st.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"], key="in_tipe")
             
-            # INPUT BARU: BARANG LAMA
-            st.text_input("Detail Barang Lama (Wajib Jika Tukar Tambah)", placeholder="Contoh: Kulkas Sharp 1 Pintu Rusak", key="in_barang_lama")
+            # KONDISIONAL: HANYA MUNCUL JIKA TUKAR TAMBAH
+            if sel_tipe == "Tukar Tambah":
+                st.info("🔄 Mode Tukar Tambah Aktif")
+                st.text_input("Detail Barang Lama (Wajib)", placeholder="Merk, Tipe, Kondisi...", key="in_barang_lama")
 
             c7, c8 = st.columns(2)
-            st.selectbox("Instalasi?", ["Tidak", "Ya - Vendor"], key="in_instalasi")
-            st.text_input("Biaya Trans (Rp)", key="in_biaya_inst")
+            sel_inst = st.selectbox("Instalasi?", ["Tidak", "Ya - Vendor"], key="in_instalasi")
             
-            st.form_submit_button("Kirim ke Gudang", type="primary", on_click=process_sales_submit)
+            # KONDISIONAL: HANYA MUNCUL JIKA INSTALASI VENDOR
+            if sel_inst == "Ya - Vendor":
+                st.info("🔧 Mode Instalasi Vendor Aktif")
+                st.text_input("Biaya Transport (Rp)", key="in_biaya_inst")
+            
+            st.divider()
+            # Tombol Kirim (Bukan form submit button lagi, tapi button biasa)
+            st.button("Kirim ke Gudang", type="primary", on_click=process_sales_submit)
 
 # ==========================================
 # HALAMAN 5: UPDATE STATUS
