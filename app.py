@@ -1,6 +1,8 @@
-# Versi 2.51 (STABIL)
-# Status: Production Ready / Siap Pakai
-# Update: Mengubah urutan menu agar "Dashboard Monitoring" menjadi halaman default (Paling Atas) untuk Sales & SPV.
+# Versi 2.52
+# Update:
+# 1. Menambahkan kolom Input "Barang Lama" khusus untuk Tipe Tukar Tambah.
+# 2. Validasi Wajib: Jika pilih Tukar Tambah, kolom Barang Lama harus diisi.
+# 3. Menampilkan Info Barang Lama di PDF Struk.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -47,10 +49,10 @@ supabase: Client = create_client(url, key)
 def get_status_color(status):
     s = status.lower()
     if "selesai" in s or "diterima" in s: return "success"
-    elif "dikirim" in s or "jalan" in s or "pengiriman" in s: return "info"
+    elif "dikirim" in s or "jalan" in s: return "info"
     else: return "warning"
 
-# --- FUNGSI CETAK PDF ---
+# --- FUNGSI CETAK PDF (UPDATE 2.52 - Info Tukar Tambah) ---
 def create_thermal_pdf(data):
     def safe_text(text):
         if not text: return "-"
@@ -68,14 +70,14 @@ def create_thermal_pdf(data):
         pdf.line(margin, y, margin + w_full, y)
         pdf.ln(2)
 
-    # HEADER
+    # 1. HEADER
     pdf.set_font("Arial", 'B', 16)
     pdf.set_x(0)
     pdf.cell(80, 8, "SURAT JALAN", 0, 1, 'C')
     pdf.set_x(margin)
     draw_line()
     
-    # INFO
+    # 2. INFO
     pdf.set_font("Arial", '', 10)
     pdf.cell(20, 5, "No Order", 0, 0)
     pdf.set_font("Arial", 'B', 11)
@@ -85,7 +87,7 @@ def create_thermal_pdf(data):
     pdf.cell(52, 5, f": {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 1)
     draw_line()
     
-    # PENERIMA
+    # 3. PENERIMA
     pdf.set_font("Arial", 'B', 11)
     pdf.cell(w_full, 6, "PENERIMA:", 0, 1)
     pdf.set_font("Arial", 'B', 12)
@@ -97,7 +99,7 @@ def create_thermal_pdf(data):
     pdf.multi_cell(w_full, 5, safe_text(data['delivery_address']))
     draw_line()
     
-    # SALES
+    # 4. SALES
     pdf.set_font("Arial", 'B', 11)
     pdf.cell(w_full, 6, "SALES:", 0, 1)
     pdf.set_font("Arial", '', 10)
@@ -107,15 +109,24 @@ def create_thermal_pdf(data):
     pdf.cell(57, 5, f": {safe_text(data.get('sales_phone', '-'))}", 0, 1)
     draw_line()
     
-    # BARANG
+    # 5. BARANG
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(w_full, 8, "BARANG:", 0, 1)
     pdf.set_font("Arial", 'B', 11)
     pdf.multi_cell(w_full, 6, f"- {safe_text(data['product_name'])}")
     pdf.ln(2)
+    
     pdf.set_font("Arial", '', 10)
     pdf.cell(25, 5, "Tipe Kirim", 0, 0)
     pdf.cell(47, 5, f": {safe_text(data['delivery_type'])}", 0, 1)
+    
+    # Menampilkan Barang Lama jika Tukar Tambah
+    if data['delivery_type'] == "Tukar Tambah" and data.get('old_product_name'):
+        pdf.set_font("Arial", 'I', 9)
+        pdf.cell(25, 5, "Brg Lama", 0, 0)
+        pdf.multi_cell(47, 5, f": {safe_text(data.get('old_product_name'))}")
+        pdf.set_font("Arial", '', 10) # Reset font
+
     if data.get('installation_opt') == "Ya - Vendor":
         pdf.cell(25, 5, "Instalasi", 0, 0)
         pdf.cell(47, 5, f": YA (Vendor)", 0, 1)
@@ -123,7 +134,7 @@ def create_thermal_pdf(data):
         pdf.cell(47, 5, f": Rp {safe_text(data.get('installation_fee', '-'))}", 0, 1)
     draw_line()
     
-    # TTD
+    # 6. TTD
     pdf.ln(5)
     y_start = pdf.get_y()
     col_w = 36
@@ -141,7 +152,7 @@ def create_thermal_pdf(data):
     pdf.cell(col_w, 5, f"({safe_text(data['customer_name'])})", 0, 1, 'C')
     pdf.ln(8)
     
-    # QR CODE
+    # 7. QR CODE
     qr_url = f"{APP_BASE_URL}/?oid={data['order_id']}"
     qr = qrcode.make(qr_url)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
@@ -170,10 +181,17 @@ def process_sales_submit():
     in_hp, in_alamat = s.get("in_hp", ""), s.get("in_alamat", "")
     in_barang, in_tipe = s.get("in_barang", ""), s.get("in_tipe", "Reguler")
     in_inst, in_fee = s.get("in_instalasi", "Tidak"), s.get("in_biaya_inst", "")
+    in_old_item = s.get("in_barang_lama", "") # Input Baru
     branch = s.get("user_branch", "")
 
+    # VALIDASI DASAR
     if not (in_id and in_sales and in_nama and in_barang):
-        st.session_state['sales_error'] = "⚠️ Data wajib belum lengkap."
+        st.session_state['sales_error'] = "⚠️ Data wajib belum lengkap (ID, Sales, Customer, Barang)."
+        return
+
+    # VALIDASI TUKAR TAMBAH (Fitur Baru)
+    if in_tipe == "Tukar Tambah" and not in_old_item:
+        st.session_state['sales_error'] = "⚠️ Untuk Tipe Tukar Tambah, 'Detail Barang Lama' WAJIB diisi!"
         return
 
     try:
@@ -182,7 +200,8 @@ def process_sales_submit():
             "delivery_address": in_alamat, "product_name": in_barang, "delivery_type": in_tipe,
             "sales_name": in_sales, "sales_phone": in_sales_hp, "branch": branch,
             "status": "Menunggu Konfirmasi", "last_updated": datetime.now().isoformat(),
-            "installation_opt": in_inst, "installation_fee": in_fee
+            "installation_opt": in_inst, "installation_fee": in_fee,
+            "old_product_name": in_old_item # Simpan Barang Lama
         }
         supabase.table("shipments").insert(payload).execute()
         
@@ -193,7 +212,8 @@ def process_sales_submit():
         st.session_state['sales_pdf_data'] = b64_pdf
         st.session_state['sales_last_id'] = in_id
         
-        for k in ["in_id", "in_sales", "in_sales_hp", "in_nama", "in_hp", "in_alamat", "in_barang", "in_biaya_inst"]:
+        # Clear Data
+        for k in ["in_id", "in_sales", "in_sales_hp", "in_nama", "in_hp", "in_alamat", "in_barang", "in_biaya_inst", "in_barang_lama"]:
             st.session_state[k] = ""
         st.session_state["in_tipe"] = "Reguler"
         st.session_state["in_instalasi"] = "Tidak"
@@ -244,13 +264,12 @@ st.markdown("""
 if 'user_role' not in st.session_state: st.session_state['user_role'] = "Guest" 
 if 'user_branch' not in st.session_state: st.session_state['user_branch'] = ""
 
-# URUTAN MENU DIPERBARUI: Dashboard Paling Atas untuk Sales & SPV
 if st.session_state['user_role'] == "Guest":
     menu_options = ["🔍 Cek Resi (Public)", "🔐 Login Staff"] 
 elif st.session_state['user_role'] == "Sales":
-    menu_options = ["📊 Dashboard Monitoring", "📝 Input Delivery Order", "🔍 Cek Resi (Public)"]
+    menu_options = ["📝 Input Delivery Order", "📊 Dashboard Monitoring", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "SPV":
-    menu_options = ["📊 Dashboard Monitoring", "📝 Input Delivery Order", "⚙️ Update Status (SPV)", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
+    menu_options = ["📝 Input Delivery Order", "⚙️ Update Status (SPV)", "📊 Dashboard Monitoring", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "Admin":
     menu_options = ["📊 Dashboard Monitoring", "⚙️ Update Status (Admin)", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
 
@@ -266,7 +285,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.51 (Stabil)**")
+    st.caption("🚀 **Versi 2.52 (Beta)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -300,6 +319,11 @@ if menu == "🔍 Cek Resi (Public)":
                         install_info = ""
                         if d.get('installation_opt') == "Ya - Vendor":
                             install_info = f"* 🔧 **Instalasi:** Ya (Vendor) - Biaya: {d.get('installation_fee')}"
+                        
+                        # Info Tukar Tambah di Cek Resi
+                        old_item_info = ""
+                        if d.get('delivery_type') == "Tukar Tambah" and d.get('old_product_name'):
+                            old_item_info = f"* 🔄 **Tukar Tambah:** {d.get('old_product_name')}"
 
                         st.markdown(f"""
                         ### {d['product_name']}
@@ -308,6 +332,7 @@ if menu == "🔍 Cek Resi (Public)":
                         * 🔢 Order ID: `{d['order_id']}`
                         * 🚚 Kurir: {d['courier'] or '-'}
                         * 🔖 Resi: {d['resi'] or '-'}
+                        {old_item_info}
                         {install_info}
                         * 🕒 **Update:** {tgl[:16].replace('T',' ')}
                         """)
@@ -394,11 +419,6 @@ elif menu == "📊 Dashboard Monitoring":
             pending = [x for x in filtered if "selesai" not in x['status'].lower() and "dikirim" not in x['status'].lower() and "jalan" not in x['status'].lower() and "pengiriman" not in x['status'].lower()]
             shipping = [x for x in filtered if "dikirim" in x['status'].lower() or "jalan" in x['status'].lower() or "pengiriman" in x['status'].lower()]
             done = [x for x in filtered if "selesai" in x['status'].lower() or "diterima" in x['status'].lower()]
-            
-            # Badge Notifikasi
-            pending_confirmation = [x for x in filtered if x['status'] == "Menunggu Konfirmasi"]
-            if pending_confirmation and st.session_state['user_role'] in ["SPV", "Admin"]:
-                 st.error(f"🔔 PERHATIAN: Ada {len(pending_confirmation)} Order Baru Menunggu Konfirmasi!", icon="🔥")
 
             c1, c2, c3 = st.columns(3)
             c1.metric("📦 Diproses", f"{len(pending)}")
@@ -453,6 +473,9 @@ elif menu == "📝 Input Delivery Order":
             st.text_input("Nama Barang", key="in_barang")
             st.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"], key="in_tipe")
             
+            # INPUT BARU: BARANG LAMA
+            st.text_input("Detail Barang Lama (Wajib Jika Tukar Tambah)", placeholder="Contoh: Kulkas Sharp 1 Pintu Rusak", key="in_barang_lama")
+
             c7, c8 = st.columns(2)
             st.selectbox("Instalasi?", ["Tidak", "Ya - Vendor"], key="in_instalasi")
             st.text_input("Biaya Trans (Rp)", key="in_biaya_inst")
@@ -587,10 +610,3 @@ elif menu == "🗄️ Manajemen Data":
                         st.rerun()
     else:
         st.info("Belum ada data untuk dikelola.")
-
-# ==========================================
-# HALAMAN 7: HAPUS (LEGACY REDIRECT)
-# ==========================================
-elif menu == "🗑️ Hapus Data (Admin)":
-    st.title("🗑️ Hapus Data")
-    st.info("Menu ini telah dipindahkan ke '🗄️ Manajemen Data'. Silakan akses dari sana.")
