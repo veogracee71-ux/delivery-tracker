@@ -1,7 +1,8 @@
-# Versi 2.33
-# Update: Fix Error Encoding 'Latin-1' pada PDF.
-# 1. Mengganti bullet point (•) dengan strip (-) agar kompatibel.
-# 2. Menambahkan fungsi 'safe_text' untuk membersihkan input user dari emoji/karakter asing agar PDF tidak crash.
+# Versi 2.34
+# Update:
+# 1. Menghapus Header "BLIBLI ELEKTRONIK" di PDF (Langsung "SURAT JALAN").
+# 2. Mengisi otomatis Nama Penerima di kolom Tanda Tangan (Bukan titik-titik lagi).
+# 3. QR Code berisi Data Teks Lengkap agar Customer bisa scan dan baca info langsung tanpa link error.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -43,23 +44,19 @@ def get_status_color(status):
     elif "dikirim" in s or "jalan" in s: return "info"
     else: return "warning"
 
-# --- FUNGSI CETAK PDF (UPDATE 2.33 - FIX ENCODING) ---
+# --- FUNGSI CETAK PDF (UPDATE 2.34) ---
 def create_thermal_pdf(data):
-    # Fungsi untuk membersihkan teks dari karakter yang tidak didukung Latin-1 (seperti Emoji/Bullet)
+    # Fungsi pembersih teks
     def safe_text(text):
         if not text: return "-"
-        # Encode ke latin-1 dengan 'replace' (karakter aneh jadi tanda tanya), lalu decode balik
         return str(text).encode('latin-1', 'replace').decode('latin-1')
 
     # Setup PDF: Lebar 80mm
     pdf = FPDF(orientation='P', unit='mm', format=(80, 250))
     pdf.add_page()
     
-    # Margin 4mm
     margin = 4
     pdf.set_margins(margin, margin, margin)
-    
-    # Lebar area cetak efektif
     w_full = 72
     
     def draw_line():
@@ -68,15 +65,12 @@ def create_thermal_pdf(data):
         pdf.line(margin, y, margin + w_full, y)
         pdf.ln(2)
 
-    # 1. HEADER (Sangat Jelas)
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(w_full, 8, "BLIBLI ELEKTRONIK", 0, 1, 'C')
-    
+    # 1. HEADER (Update 2.34: Hapus Nama Toko, Langsung Judul)
     pdf.set_font("Arial", 'B', 14)
-    pdf.cell(w_full, 8, "SURAT JALAN", 1, 1, 'C')
+    pdf.cell(w_full, 8, "SURAT JALAN", 1, 1, 'C') # Judul Utama
     draw_line()
     
-    # 2. INFO TRANSAKSI (Tegas)
+    # 2. INFO TRANSAKSI
     pdf.set_font("Arial", '', 10)
     pdf.cell(20, 5, "No Order", 0, 0)
     pdf.set_font("Arial", 'B', 11)
@@ -120,7 +114,6 @@ def create_thermal_pdf(data):
     pdf.cell(w_full, 8, "BARANG:", 0, 1)
     
     pdf.set_font("Arial", 'B', 11)
-    # FIX: Menggunakan safe_text dan tanda minus (-) pengganti bullet
     pdf.multi_cell(w_full, 6, f"- {safe_text(data['product_name'])}")
     
     pdf.ln(2)
@@ -136,7 +129,7 @@ def create_thermal_pdf(data):
     
     draw_line()
     
-    # 6. TANDA TANGAN
+    # 6. TANDA TANGAN (Update 2.34: Nama Otomatis)
     pdf.ln(5)
     y_start = pdf.get_y()
     col_w = 36
@@ -147,19 +140,29 @@ def create_thermal_pdf(data):
     pdf.set_xy(margin + col_w, y_start)
     pdf.cell(col_w, 5, "Penerima,", 0, 1, 'C')
     
-    pdf.ln(20)
+    pdf.ln(20) # Ruang TTD
     
     y_end = pdf.get_y()
     pdf.set_font("Arial", 'B', 10)
+    
+    # Kolom Kiri (Sales)
     pdf.set_xy(margin, y_end)
     pdf.cell(col_w, 5, f"({safe_text(data['sales_name'])})", 0, 0, 'C')
+    
+    # Kolom Kanan (Customer) - Update: Nama Otomatis
     pdf.set_xy(margin + col_w, y_end)
-    pdf.cell(col_w, 5, "(....................)", 0, 1, 'C')
+    pdf.cell(col_w, 5, f"({safe_text(data['customer_name'])})", 0, 1, 'C')
     
     pdf.ln(8)
     
-    # 7. QR CODE (Isi Text Safe)
-    qr_str = f"ID:{safe_text(data['order_id'])}\nCUST:{safe_text(data['customer_name'])}\nSTAT:{safe_text(data['status'])}"
+    # 7. QR CODE (Berisi Data Teks)
+    # Format Teks agar mudah dibaca saat discan
+    qr_str = f"""DETAIL ORDER
+ID: {safe_text(data['order_id'])}
+Customer: {safe_text(data['customer_name'])}
+Barang: {safe_text(data['product_name'])}
+Status: {safe_text(data['status'])}"""
+    
     qr = qrcode.make(qr_str)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
         qr.save(tmp.name)
@@ -171,7 +174,7 @@ def create_thermal_pdf(data):
     
     pdf.ln(2)
     pdf.set_font("Arial", 'B', 10)
-    pdf.cell(w_full, 5, "SCAN UNTUK CEK STATUS", 0, 1, 'C')
+    pdf.cell(w_full, 5, "SCAN UNTUK CEK DATA", 0, 1, 'C')
     
     return pdf.output(dest='S').encode('latin-1')
 
@@ -259,7 +262,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.33 (Beta)**")
+    st.caption("🚀 **Versi 2.34 (Beta)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
