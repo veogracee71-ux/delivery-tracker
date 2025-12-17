@@ -1,7 +1,7 @@
-# Versi 2.71 (Role Access Update)
-# Status: Produksi - Stabil
-# Update: Membatasi menu "Input Delivery Order" hanya untuk role Sales.
-#         SPV dan Admin Pusat sekarang tidak lagi memiliki akses input untuk menjaga integritas data.
+# Versi 2.65 (UX Improvement - Stabil)
+# Status: Produksi / Baseline Terpilih
+# Deskripsi: Fitur lengkap dengan perbaikan tampilan halaman kosong (blank UI fix).
+#            Formulir menggunakan layout standar satu kolom untuk kemudahan input HP.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -74,7 +74,7 @@ def create_thermal_pdf(data, print_timestamp):
     pdf.set_x(margin)
     draw_line()
     
-    # INFO
+    # INFO ORDER
     pdf.set_font("Arial", '', 10)
     pdf.cell(20, 5, "No Order", 0, 0)
     pdf.set_font("Arial", 'B', 11)
@@ -97,7 +97,7 @@ def create_thermal_pdf(data, print_timestamp):
     pdf.multi_cell(w_full, 5, safe_text(data['delivery_address']))
     draw_line()
     
-    # SALES
+    # SALES INFO
     pdf.set_font("Arial", 'B', 11)
     pdf.cell(w_full, 6, "SALES:", 0, 1)
     pdf.set_font("Arial", '', 10)
@@ -256,7 +256,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR LOGIC (ROLE BASED ACCESS) ---
+# --- SIDEBAR LOGIC ---
 if 'user_role' not in st.session_state: st.session_state['user_role'] = "Guest" 
 if 'user_branch' not in st.session_state: st.session_state['user_branch'] = ""
 
@@ -265,10 +265,8 @@ if st.session_state['user_role'] == "Guest":
 elif st.session_state['user_role'] == "Sales":
     menu_options = ["📊 Dashboard Monitoring", "📝 Input Delivery Order", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "SPV":
-    # UPDATE V2.71: Menghilangkan menu Input untuk SPV
-    menu_options = ["📊 Dashboard Monitoring", "⚙️ Update Status", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
+    menu_options = ["📊 Dashboard Monitoring", "📝 Input Delivery Order", "⚙️ Update Status", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "Admin":
-    # UPDATE V2.71: Menghilangkan menu Input untuk Admin
     menu_options = ["📊 Dashboard Monitoring", "⚙️ Update Status", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
 
 menu = st.sidebar.radio("Menu Aplikasi", menu_options)
@@ -282,7 +280,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.71 (Role Access Fix)**")
+    st.caption("🚀 **Versi 2.65 (Baseline Stabil)**")
 
 # ==========================================
 # HALAMAN 1: CEK RESI (LANDING PAGE)
@@ -390,14 +388,9 @@ elif menu == "📊 Dashboard Monitoring":
     except Exception as e: st.error(str(e))
 
 # ==========================================
-# HALAMAN 4: INPUT ORDER (Hanya untuk Sales)
+# HALAMAN 4: INPUT ORDER (STANDARD VERTICAL LAYOUT)
 # ==========================================
 elif menu == "📝 Input Delivery Order":
-    # Proteksi Tambahan di tingkat Halaman
-    if st.session_state['user_role'] not in ["Sales"]:
-        st.error("⛔ Akses Ditolak. Menu ini hanya untuk staf Sales Cabang.")
-        st.stop()
-
     st.title("📝 Input Delivery Order")
     if st.session_state.get('sales_success'):
         st.success(f"✅ Order {st.session_state.get('sales_last_id')} Berhasil!")
@@ -432,7 +425,7 @@ elif menu == "📝 Input Delivery Order":
             st.button("Kirim ke Gudang", type="primary", on_click=process_sales_submit)
 
 # ==========================================
-# HALAMAN 5: UPDATE STATUS
+# HALAMAN 5: UPDATE STATUS (FIX BLANK UI)
 # ==========================================
 elif menu == "⚙️ Update Status":
     st.title("⚙️ Validasi Order")
@@ -464,6 +457,7 @@ elif menu == "⚙️ Update Status":
                 st.text_input("Nama Barang", value=curr['product_name'], key=f"cbar_{oid}")
                 st.form_submit_button("Simpan", on_click=process_admin_update, args=(oid,))
     else:
+        # UX FIX V2.65: Munculkan pesan jika data kosong agar tidak blank putih
         st.info("📍 Belum ada order yang masuk untuk divalidasi di cabang ini.")
 
 # ==========================================
