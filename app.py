@@ -1,7 +1,6 @@
-# Versi 2.56 (Fix Timezone)
+# Versi 2.57 (Fix Import)
 # Status: Stabil
-# Update: FIX BUG TIMEZONE. Menambahkan offset +7 jam (WIB) pada timestamp saat input order
-#         agar jam yang tercetak di Surat Jalan (PDF) sinkron dengan waktu lokal (Indonesia).
+# Update: FIX BUG NameError: name 'FPDF' is not defined. Menambahkan import FPDF yang hilang.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -9,6 +8,7 @@ from supabase import create_client, Client
 from urllib.parse import quote
 import time
 from datetime import datetime, date, timedelta # Tambah timedelta
+from fpdf import FPDF # FIX: Import FPDF yang hilang
 import base64
 import qrcode
 import tempfile
@@ -290,7 +290,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.56 (Fix Sync)**")
+    st.caption("🚀 **Versi 2.57 (Fix Import)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
