@@ -1,8 +1,5 @@
-# Versi 2.39
-# Update:
-# 1. PDF Struk: Judul "SURAT JALAN" dipastikan Center dan diperbesar.
-# 2. PDF Struk: Label "PENGIRIM (SALES)" diganti jadi "SALES".
-# 3. Fitur lain tetap sama (Download button tetap muncul setelah submit).
+# Versi 2.41
+# Update: Fix Error 'cannot be modified' di menu Update Status dengan menggunakan Callback & Dynamic Keys.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -50,7 +47,7 @@ def get_status_color(status):
     elif "dikirim" in s or "jalan" in s: return "info"
     else: return "warning"
 
-# --- FUNGSI CETAK PDF (UPDATE 2.39) ---
+# --- FUNGSI CETAK PDF ---
 def create_thermal_pdf(data):
     def safe_text(text):
         if not text: return "-"
@@ -68,9 +65,9 @@ def create_thermal_pdf(data):
         pdf.line(margin, y, margin + w_full, y)
         pdf.ln(2)
 
-    # 1. HEADER (SURAT JALAN CENTER)
-    pdf.set_font("Arial", 'B', 16) # Font diperbesar biar tegas
-    pdf.cell(w_full, 8, "SURAT JALAN", 0, 1, 'C') # Center Alignment
+    # 1. HEADER (CENTER)
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(w_full, 8, "SURAT JALAN", 0, 1, 'C')
     draw_line()
     
     # 2. INFO
@@ -96,9 +93,9 @@ def create_thermal_pdf(data):
     pdf.multi_cell(w_full, 5, safe_text(data['delivery_address']))
     draw_line()
     
-    # 4. SALES (Update: Label Ganti Jadi SALES)
+    # 4. SALES
     pdf.set_font("Arial", 'B', 11)
-    pdf.cell(w_full, 6, "SALES:", 0, 1) # Label Baru
+    pdf.cell(w_full, 6, "SALES:", 0, 1)
     pdf.set_font("Arial", '', 10)
     pdf.cell(15, 5, "Nama", 0, 0)
     pdf.cell(57, 5, f": {safe_text(data['sales_name'])} ({safe_text(data['branch'])})", 0, 1)
@@ -143,7 +140,6 @@ def create_thermal_pdf(data):
     
     # 7. QR CODE
     qr_url = f"{APP_BASE_URL}/?oid={data['order_id']}"
-    
     qr = qrcode.make(qr_url)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
         qr.save(tmp.name)
@@ -165,7 +161,6 @@ def process_sales_submit():
     st.session_state['sales_error'] = None
     s = st.session_state
     
-    # Collect Data
     in_id, in_sales = s.get("in_id", ""), s.get("in_sales", "")
     in_sales_hp, in_nama = s.get("in_sales_hp", ""), s.get("in_nama", "")
     in_hp, in_alamat = s.get("in_hp", ""), s.get("in_alamat", "")
@@ -194,7 +189,6 @@ def process_sales_submit():
         st.session_state['sales_pdf_data'] = b64_pdf
         st.session_state['sales_last_id'] = in_id
         
-        # Clear
         for k in ["in_id", "in_sales", "in_sales_hp", "in_nama", "in_hp", "in_alamat", "in_barang", "in_biaya_inst"]:
             st.session_state[k] = ""
         st.session_state["in_tipe"] = "Reguler"
@@ -206,6 +200,34 @@ def process_sales_submit():
             st.session_state['sales_error'] = f"⛔ Order ID **{in_id}** sudah ada."
         else:
             st.session_state['sales_error'] = f"Error: {err_msg}"
+
+# --- CALLBACK ADMIN UPDATE (FIX BUG RESET) ---
+def process_admin_update(oid):
+    # Ambil data dari widget dinamis
+    new_stat = st.session_state.get(f"stat_{oid}")
+    new_kurir = st.session_state.get(f"kur_{oid}")
+    new_resi = st.session_state.get(f"res_{oid}")
+    
+    d_date = st.session_state.get(f"date_{oid}")
+    d_time = st.session_state.get(f"time_{oid}")
+    
+    corr_nama = st.session_state.get(f"cnama_{oid}")
+    corr_barang = st.session_state.get(f"cbar_{oid}")
+    
+    final_dt = datetime.combine(d_date, d_time).isoformat()
+    
+    upd = {
+        "status": new_stat, "courier": new_kurir, "resi": new_resi,
+        "last_updated": final_dt, "customer_name": corr_nama, "product_name": corr_barang
+    }
+    
+    try:
+        supabase.table("shipments").update(upd).eq("order_id", oid).execute()
+        st.toast("Data Terupdate!", icon="✅")
+        # Reset Dropdown Pilihan Order (INI KUNCINYA)
+        st.session_state["upd_sel"] = None
+    except Exception as e:
+        st.toast(f"Error: {e}", icon="❌")
 
 # --- CUSTOM CSS ---
 st.markdown("""
@@ -243,11 +265,11 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.39 (Beta)**")
+    st.caption("🚀 **Versi 2.41 (Beta)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
-# HALAMAN 1: CEK RESI (LANDING PAGE)
+# HALAMAN 1: CEK RESI
 # ==========================================
 if menu == "🔍 Cek Resi (Public)":
     st.title("🔍 Lacak Pengiriman")
@@ -291,11 +313,11 @@ if menu == "🔍 Cek Resi (Public)":
                         msg = f"Halo Kak {d['customer_name']}, pesanan {d['product_name']} statusnya: *{d['status']}*."
                         st.code(msg, language=None)
                         st.divider()
-                else: st.warning("Data tidak ditemukan. Mohon cek kembali Order ID Anda.")
+                else: st.warning("Data tidak ditemukan.")
             except: st.error("Terjadi kesalahan koneksi.")
 
 # ==========================================
-# HALAMAN 2: LOGIN (PROTECTED WITH GATEKEEPER)
+# HALAMAN 2: LOGIN
 # ==========================================
 elif menu == "🔐 Login Staff":
     st.title("🔐 Login Staff & Admin")
@@ -397,34 +419,41 @@ elif menu == "📝 Input Delivery Order":
     if st.session_state.get('sales_success'):
         st.success(f"✅ Order {st.session_state.get('sales_last_id')} Berhasil Dikirim!")
         b64 = st.session_state.get('sales_pdf_data')
-        st.markdown(f'<a href="data:application/pdf;base64,{b64}" download="SJ_{st.session_state.get("sales_last_id")}.pdf" style="text-decoration:none;"><button style="background-color:#0095DA;color:white;border:none;padding:10px;border-radius:5px;cursor:pointer;width:100%;">🖨️ DOWNLOAD SURAT JALAN (PDF 80mm)</button></a>', unsafe_allow_html=True)
+        
+        st.markdown(f'<a href="data:application/pdf;base64,{b64}" download="SJ_{st.session_state.get("sales_last_id")}.pdf" style="text-decoration:none;"><button style="background-color:#0095DA;color:white;border:none;padding:10px;border-radius:5px;cursor:pointer;width:100%;">DOWNLOAD SURAT JALAN (PDF 80mm)</button></a>', unsafe_allow_html=True)
+        st.caption("*Silakan download sebelum buat order baru.*")
         st.divider()
+        
+        if st.button("Selesai / Buat Baru"):
+            st.session_state['sales_success'] = False
+            st.rerun()
     
     if st.session_state.get('sales_error'): st.error(st.session_state['sales_error'])
 
-    with st.form("sales_form", clear_on_submit=False):
-        c1, c2 = st.columns(2)
-        st.text_input("Order ID (Wajib)", key="in_id")
-        
-        c2a, c2b = c2.columns(2)
-        st.text_input("Nama Sales", key="in_sales")
-        st.text_input("No WA Sales", key="in_sales_hp")
-        
-        c3, c4 = st.columns(2)
-        st.text_input("Nama Customer", key="in_nama")
-        st.text_input("No HP Customer", key="in_hp")
-        st.text_area("Alamat Pengiriman", key="in_alamat")
-        
-        st.markdown("**Detail Barang**")
-        c5, c6 = st.columns(2)
-        st.text_input("Nama Barang", key="in_barang")
-        st.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"], key="in_tipe")
-        
-        c7, c8 = st.columns(2)
-        st.selectbox("Instalasi?", ["Tidak", "Ya - Vendor"], key="in_instalasi")
-        st.text_input("Biaya Trans (Rp)", key="in_biaya_inst")
-        
-        st.form_submit_button("Kirim ke Gudang", type="primary", on_click=process_sales_submit)
+    if not st.session_state.get('sales_success'):
+        with st.form("sales_form", clear_on_submit=False):
+            c1, c2 = st.columns(2)
+            st.text_input("Order ID (Wajib)", key="in_id")
+            
+            c2a, c2b = c2.columns(2)
+            st.text_input("Nama Sales", key="in_sales")
+            st.text_input("No WA Sales", key="in_sales_hp")
+            
+            c3, c4 = st.columns(2)
+            st.text_input("Nama Customer", key="in_nama")
+            st.text_input("No HP Customer", key="in_hp")
+            st.text_area("Alamat Pengiriman", key="in_alamat")
+            
+            st.markdown("**Detail Barang**")
+            c5, c6 = st.columns(2)
+            st.text_input("Nama Barang", key="in_barang")
+            st.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"], key="in_tipe")
+            
+            c7, c8 = st.columns(2)
+            st.selectbox("Instalasi?", ["Tidak", "Ya - Vendor"], key="in_instalasi")
+            st.text_input("Biaya Trans (Rp)", key="in_biaya_inst")
+            
+            st.form_submit_button("Kirim ke Gudang", type="primary", on_click=process_sales_submit)
 
 # ==========================================
 # HALAMAN 5: UPDATE STATUS
@@ -441,32 +470,34 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
         
         if sel:
             curr = opts[sel]
+            oid = curr['order_id']
             with st.expander("Tracking PT. BES"):
                 st.link_button("Buka Web BES", "https://www.bes-paket.com/track-package")
                 components.iframe("https://www.bes-paket.com/track-package", height=400)
             
+            # Form Update dengan Dynamic Key agar bisa direfresh
             with st.form("upd_form"):
                 c1, c2 = st.columns(2)
                 sts = ["Menunggu Konfirmasi", "Diproses Gudang", "Menunggu Kurir", "Dalam Pengiriman", "Selesai/Diterima"]
                 try: idx = sts.index(curr['status']) 
                 except: idx=0
-                n_st = c1.selectbox("Status", sts, index=idx)
-                n_kur = c2.text_input("Kurir", value=curr['courier'] or "")
-                n_resi = st.text_input("Resi", value=curr['resi'] or "")
+                
+                st.selectbox("Status", sts, index=idx, key=f"stat_{oid}")
+                st.text_input("Kurir", value=curr['courier'] or "", key=f"kur_{oid}")
+                st.text_input("Resi", value=curr['resi'] or "", key=f"res_{oid}")
                 
                 st.divider()
-                st.write("**Waktu Status Terakhir (Fakta Lapangan):**")
-                d_date = c1.date_input("Tanggal", value="today")
-                d_time = c2.time_input("Jam", value="now")
-                final_dt = datetime.combine(d_date, d_time).isoformat()
+                st.write("**Waktu Fakta Lapangan:**")
+                st.date_input("Tanggal", value="today", key=f"date_{oid}")
+                st.time_input("Jam", value="now", key=f"time_{oid}")
+                
+                st.divider()
+                st.caption("Koreksi Data:")
+                st.text_input("Nama Customer", value=curr['customer_name'], key=f"cnama_{oid}")
+                st.text_input("Nama Barang", value=curr['product_name'], key=f"cbar_{oid}")
 
-                if st.form_submit_button("Simpan"):
-                    upd = {"status": n_st, "courier": n_kur, "resi": n_resi, "last_updated": final_dt}
-                    supabase.table("shipments").update(upd).eq("order_id", curr['order_id']).execute()
-                    st.toast("Updated!", icon="✅")
-                    st.session_state["upd_sel"] = None
-                    time.sleep(1)
-                    st.rerun()
+                # CALLBACK PADA TOMBOL
+                st.form_submit_button("Simpan", on_click=process_admin_update, args=(oid,))
 
 # ==========================================
 # HALAMAN 6: HAPUS
