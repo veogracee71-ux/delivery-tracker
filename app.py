@@ -1,7 +1,8 @@
-# Versi 2.62 (Fix Warna Tombol)
+# Versi 2.63 (Final Fix ID Extraction)
 # Status: Stabil
-# Update: FIX FINAL WARNA TOMBOL. Menambahkan kembali selector CSS untuk st.form_submit_button 
-#         agar tombol "Simpan" di menu Validasi SPV pasti berwarna Biru Blibli (#0095DA).
+# Update: FIX BUG ID EXTRACTION. Menerapkan metode get() pada ekstraksi 'order_id' 
+#         di Dashboard agar lebih tangguh terhadap data yang tidak terstruktur atau kosong, 
+#         memecahkan error NameError/KeyError yang tidak terdeteksi.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -293,7 +294,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.62 (Final Fix)**")
+    st.caption("🚀 **Versi 2.63 (Final Fix)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -406,7 +407,7 @@ elif menu == "🔐 Login Staff":
                     else: st.error("Password Salah!")
 
 # ==========================================
-# HALAMAN 3: DASHBOARD (FIX TAMPILAN)
+# HALAMAN 3: DASHBOARD
 # ==========================================
 elif menu == "📊 Dashboard Monitoring":
     st.title("📊 Monitoring Operasional")
@@ -461,10 +462,10 @@ elif menu == "📊 Dashboard Monitoring":
             
             final_display_cols = [col for col in display_cols if col in df_display_all.columns]
 
-            # 3. Filter DataFrame untuk Display
-            pending_ids = [d['order_id'] for d in pending]
-            shipping_ids = [d['order_id'] for d in shipping]
-            done_ids = [d['order_id'] for d in done]
+            # 3. Filter DataFrame untuk Display (FIX V2.63)
+            pending_ids = [d.get('order_id') for d in pending if d.get('order_id')]
+            shipping_ids = [d.get('order_id') for d in shipping if d.get('order_id')]
+            done_ids = [d.get('order_id') for d in done if d.get('order_id')]
 
             df_pending_display = df_display_all[df_display_all['order_id'].isin(pending_ids)][final_display_cols]
             df_shipping_display = df_display_all[df_display_all['order_id'].isin(shipping_ids)][final_display_cols]
