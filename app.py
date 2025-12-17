@@ -1,7 +1,7 @@
-# Versi 2.58 (Final Fix Notifikasi)
+# Versi 2.59 (Fix Excel Format)
 # Status: Stabil
-# Update: FIX BUG NOTIFIKASI DASHBOARD. Memastikan notifikasi "Menunggu Konfirmasi" 
-#         muncul untuk SPV/Admin dengan menggunakan .strip() agar tahan terhadap whitespace.
+# Update: FIX BUG FORMAT WAKTU DI EXCEL. Mengkonversi kolom timestamp menjadi format string
+#         'DD/MM/YYYY HH:MM' sebelum export agar kolom tidak terlihat panjang dan berantakan.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -290,7 +290,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.58 (Final Fix)**")
+    st.caption("🚀 **Versi 2.59 (Fix Excel)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -424,7 +424,7 @@ elif menu == "📊 Dashboard Monitoring":
             shipping = [x for x in filtered if "dikirim" in x['status'].lower() or "jalan" in x['status'].lower() or "pengiriman" in x['status'].lower()]
             done = [x for x in filtered if "selesai" in x['status'].lower() or "diterima" in x['status'].lower()]
             
-            # Badge Notifikasi (FIX: Menggunakan .strip() untuk robust comparison)
+            # Badge Notifikasi
             pending_confirmation = [x for x in filtered if x['status'].strip() == "Menunggu Konfirmasi"]
             if pending_confirmation and st.session_state['user_role'] in ["SPV", "Admin"]:
                  st.error(f"🔔 PERHATIAN: Ada {len(pending_confirmation)} Order Baru Menunggu Konfirmasi!", icon="🔥")
@@ -543,7 +543,7 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
                 st.form_submit_button("Simpan", on_click=process_admin_update, args=(oid,))
 
 # ==========================================
-# HALAMAN 6: MANAJEMEN DATA
+# HALAMAN 6: MANAJEMEN DATA (FIX EXCEL FORMAT)
 # ==========================================
 elif menu == "🗄️ Manajemen Data":
     st.title("🗄️ Manajemen Data")
@@ -563,6 +563,23 @@ elif menu == "🗄️ Manajemen Data":
         with tab1:
             st.subheader("Download Data Bulanan (Excel)")
             st.write(f"Total Data: **{len(df)}** baris")
+            
+            # --- DATA CLEANING FOR EXCEL ---
+            
+            # 1. Konversi ke datetime objects
+            if 'created_at' in df.columns:
+                df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce')
+            if 'last_updated' in df.columns:
+                df['last_updated'] = pd.to_datetime(df['last_updated'], errors='coerce')
+            
+            # 2. Format menjadi string rapi (DD/MM/YYYY HH:MM)
+            # Karena kita menggunakan TIMESTAMP WITHOUT TIME ZONE (WIB), ini sudah aman.
+            if 'created_at' in df.columns:
+                df['created_at'] = df['created_at'].dt.strftime('%d/%m/%Y %H:%M')
+            if 'last_updated' in df.columns:
+                df['last_updated'] = df['last_updated'].dt.strftime('%d/%m/%Y %H:%M')
+            
+            # --- END DATA CLEANING ---
             
             cabang_name = st.session_state['user_branch'].replace(" ", "_") if st.session_state['user_role'] == "SPV" else "Semua_Cabang"
             bulan_indo = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
