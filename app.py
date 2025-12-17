@@ -1,7 +1,6 @@
-# Versi 2.50
-# Update:
-# 1. Menambahkan "Badge Notifikasi" (Alert Merah) di Dashboard SPV/Admin jika ada order "Menunggu Konfirmasi".
-# 2. Fitur lain tetap utuh (Layout PDF, QR Link, dll).
+# Versi 2.51 (STABIL)
+# Status: Production Ready / Siap Pakai
+# Update: Mengubah urutan menu agar "Dashboard Monitoring" menjadi halaman default (Paling Atas) untuk Sales & SPV.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -245,12 +244,13 @@ st.markdown("""
 if 'user_role' not in st.session_state: st.session_state['user_role'] = "Guest" 
 if 'user_branch' not in st.session_state: st.session_state['user_branch'] = ""
 
+# URUTAN MENU DIPERBARUI: Dashboard Paling Atas untuk Sales & SPV
 if st.session_state['user_role'] == "Guest":
     menu_options = ["🔍 Cek Resi (Public)", "🔐 Login Staff"] 
 elif st.session_state['user_role'] == "Sales":
-    menu_options = ["📝 Input Delivery Order", "📊 Dashboard Monitoring", "🔍 Cek Resi (Public)"]
+    menu_options = ["📊 Dashboard Monitoring", "📝 Input Delivery Order", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "SPV":
-    menu_options = ["📝 Input Delivery Order", "⚙️ Update Status (SPV)", "📊 Dashboard Monitoring", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
+    menu_options = ["📊 Dashboard Monitoring", "📝 Input Delivery Order", "⚙️ Update Status (SPV)", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "Admin":
     menu_options = ["📊 Dashboard Monitoring", "⚙️ Update Status (Admin)", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
 
@@ -266,7 +266,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.50 (Beta)**")
+    st.caption("🚀 **Versi 2.51 (Stabil)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -391,14 +391,14 @@ elif menu == "📊 Dashboard Monitoring":
                 sel_br = st.selectbox("Filter Cabang:", br_list)
                 filtered = res.data if sel_br == "Semua Cabang" else [d for d in res.data if d.get('branch') == sel_br]
 
-            # UPDATE 2.50: NOTIFIKASI BADGE UNTUK SPV/ADMIN
-            pending_confirmation = [x for x in filtered if x['status'] == "Menunggu Konfirmasi"]
-            if pending_confirmation and st.session_state['user_role'] in ["SPV", "Admin"]:
-                 st.error(f"🔔 PERHATIAN: Ada {len(pending_confirmation)} Order Baru Menunggu Konfirmasi!", icon="🔥")
-
             pending = [x for x in filtered if "selesai" not in x['status'].lower() and "dikirim" not in x['status'].lower() and "jalan" not in x['status'].lower() and "pengiriman" not in x['status'].lower()]
             shipping = [x for x in filtered if "dikirim" in x['status'].lower() or "jalan" in x['status'].lower() or "pengiriman" in x['status'].lower()]
             done = [x for x in filtered if "selesai" in x['status'].lower() or "diterima" in x['status'].lower()]
+            
+            # Badge Notifikasi
+            pending_confirmation = [x for x in filtered if x['status'] == "Menunggu Konfirmasi"]
+            if pending_confirmation and st.session_state['user_role'] in ["SPV", "Admin"]:
+                 st.error(f"🔔 PERHATIAN: Ada {len(pending_confirmation)} Order Baru Menunggu Konfirmasi!", icon="🔥")
 
             c1, c2, c3 = st.columns(3)
             c1.metric("📦 Diproses", f"{len(pending)}")
@@ -587,3 +587,10 @@ elif menu == "🗄️ Manajemen Data":
                         st.rerun()
     else:
         st.info("Belum ada data untuk dikelola.")
+
+# ==========================================
+# HALAMAN 7: HAPUS (LEGACY REDIRECT)
+# ==========================================
+elif menu == "🗑️ Hapus Data (Admin)":
+    st.title("🗑️ Hapus Data")
+    st.info("Menu ini telah dipindahkan ke '🗄️ Manajemen Data'. Silakan akses dari sana.")
