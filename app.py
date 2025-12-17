@@ -1,14 +1,15 @@
-# Versi 2.57 (Fix Import)
+# Versi 2.58 (Final Fix Notifikasi)
 # Status: Stabil
-# Update: FIX BUG NameError: name 'FPDF' is not defined. Menambahkan import FPDF yang hilang.
+# Update: FIX BUG NOTIFIKASI DASHBOARD. Memastikan notifikasi "Menunggu Konfirmasi" 
+#         muncul untuk SPV/Admin dengan menggunakan .strip() agar tahan terhadap whitespace.
 
 import streamlit as st
 import streamlit.components.v1 as components 
 from supabase import create_client, Client
 from urllib.parse import quote
 import time
-from datetime import datetime, date, timedelta # Tambah timedelta
-from fpdf import FPDF # FIX: Import FPDF yang hilang
+from datetime import datetime, date, timedelta
+from fpdf import FPDF
 import base64
 import qrcode
 import tempfile
@@ -185,7 +186,7 @@ def process_sales_submit():
     
     # --- FIX TIMEZONE: TANGKAP WAKTU SEKALI DAN DI-OFFSET +7 JAM (WIB) ---
     TIME_OFFSET = timedelta(hours=7) 
-    current_time_wib = datetime.utcnow() + TIME_OFFSET # Naive datetime di WIB
+    current_time_wib = datetime.utcnow() + TIME_OFFSET 
 
     # VALIDASI DASAR
     if not (in_id and in_sales and in_nama and in_barang):
@@ -203,13 +204,12 @@ def process_sales_submit():
             "delivery_address": in_alamat, "product_name": in_barang, "delivery_type": in_tipe,
             "sales_name": in_sales, "sales_phone": in_sales_hp, "branch": branch,
             "status": "Menunggu Konfirmasi", 
-            "last_updated": current_time_wib.isoformat(), # Gunakan waktu WIB yang sudah di-fix
+            "last_updated": current_time_wib.isoformat(),
             "installation_opt": in_inst, "installation_fee": in_fee,
             "old_product_name": in_old_item
         }
         supabase.table("shipments").insert(payload).execute()
         
-        # Kirim payload dan WIB timestamp yang sama ke fungsi PDF
         pdf_bytes = create_thermal_pdf(payload, current_time_wib)
         b64_pdf = base64.b64encode(pdf_bytes).decode('latin-1')
         
@@ -265,7 +265,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR LOGIC (FIX MENU ORDER) ---
+# --- SIDEBAR LOGIC ---
 if 'user_role' not in st.session_state: st.session_state['user_role'] = "Guest" 
 if 'user_branch' not in st.session_state: st.session_state['user_branch'] = ""
 
@@ -290,7 +290,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.57 (Fix Import)**")
+    st.caption("🚀 **Versi 2.58 (Final Fix)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -423,6 +423,11 @@ elif menu == "📊 Dashboard Monitoring":
             pending = [x for x in filtered if "selesai" not in x['status'].lower() and "dikirim" not in x['status'].lower() and "jalan" not in x['status'].lower() and "pengiriman" not in x['status'].lower()]
             shipping = [x for x in filtered if "dikirim" in x['status'].lower() or "jalan" in x['status'].lower() or "pengiriman" in x['status'].lower()]
             done = [x for x in filtered if "selesai" in x['status'].lower() or "diterima" in x['status'].lower()]
+            
+            # Badge Notifikasi (FIX: Menggunakan .strip() untuk robust comparison)
+            pending_confirmation = [x for x in filtered if x['status'].strip() == "Menunggu Konfirmasi"]
+            if pending_confirmation and st.session_state['user_role'] in ["SPV", "Admin"]:
+                 st.error(f"🔔 PERHATIAN: Ada {len(pending_confirmation)} Order Baru Menunggu Konfirmasi!", icon="🔥")
 
             c1, c2, c3 = st.columns(3)
             c1.metric("📦 Diproses", f"{len(pending)}")
