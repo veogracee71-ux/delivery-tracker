@@ -1,5 +1,7 @@
-# Versi 2.41
-# Update: Fix Error 'cannot be modified' di menu Update Status dengan menggunakan Callback & Dynamic Keys.
+# Versi 2.43
+# Update:
+# 1. Menghapus Template Pesan (Copy Text) di menu Cek Resi.
+# 2. Mengganti label "WA" menjadi "HP" pada struk PDF (Data Sales).
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -47,7 +49,7 @@ def get_status_color(status):
     elif "dikirim" in s or "jalan" in s: return "info"
     else: return "warning"
 
-# --- FUNGSI CETAK PDF ---
+# --- FUNGSI CETAK PDF (UPDATE 2.43 - WA jadi HP) ---
 def create_thermal_pdf(data):
     def safe_text(text):
         if not text: return "-"
@@ -65,9 +67,9 @@ def create_thermal_pdf(data):
         pdf.line(margin, y, margin + w_full, y)
         pdf.ln(2)
 
-    # 1. HEADER (CENTER)
+    # 1. HEADER
     pdf.set_font("Arial", 'B', 16)
-    pdf.cell(w_full, 8, "SURAT JALAN", 0, 1, 'C')
+    pdf.cell(0, 10, "SURAT JALAN", 0, 1, 'C')
     draw_line()
     
     # 2. INFO
@@ -93,13 +95,13 @@ def create_thermal_pdf(data):
     pdf.multi_cell(w_full, 5, safe_text(data['delivery_address']))
     draw_line()
     
-    # 4. SALES
+    # 4. SALES (Update: WA -> HP)
     pdf.set_font("Arial", 'B', 11)
     pdf.cell(w_full, 6, "SALES:", 0, 1)
     pdf.set_font("Arial", '', 10)
     pdf.cell(15, 5, "Nama", 0, 0)
     pdf.cell(57, 5, f": {safe_text(data['sales_name'])} ({safe_text(data['branch'])})", 0, 1)
-    pdf.cell(15, 5, "WA", 0, 0)
+    pdf.cell(15, 5, "HP", 0, 0) # Ganti WA jadi HP
     pdf.cell(57, 5, f": {safe_text(data.get('sales_phone', '-'))}", 0, 1)
     draw_line()
     
@@ -151,7 +153,7 @@ def create_thermal_pdf(data):
     
     pdf.ln(2)
     pdf.set_font("Arial", 'B', 10)
-    pdf.cell(w_full, 5, "SCAN UNTUK TRACKING", 0, 1, 'C')
+    pdf.cell(0, 5, "SCAN UNTUK TRACKING", 0, 1, 'C')
     
     return pdf.output(dest='S').encode('latin-1')
 
@@ -201,16 +203,13 @@ def process_sales_submit():
         else:
             st.session_state['sales_error'] = f"Error: {err_msg}"
 
-# --- CALLBACK ADMIN UPDATE (FIX BUG RESET) ---
+# --- CALLBACK ADMIN UPDATE ---
 def process_admin_update(oid):
-    # Ambil data dari widget dinamis
     new_stat = st.session_state.get(f"stat_{oid}")
     new_kurir = st.session_state.get(f"kur_{oid}")
     new_resi = st.session_state.get(f"res_{oid}")
-    
     d_date = st.session_state.get(f"date_{oid}")
     d_time = st.session_state.get(f"time_{oid}")
-    
     corr_nama = st.session_state.get(f"cnama_{oid}")
     corr_barang = st.session_state.get(f"cbar_{oid}")
     
@@ -224,7 +223,6 @@ def process_admin_update(oid):
     try:
         supabase.table("shipments").update(upd).eq("order_id", oid).execute()
         st.toast("Data Terupdate!", icon="✅")
-        # Reset Dropdown Pilihan Order (INI KUNCINYA)
         st.session_state["upd_sel"] = None
     except Exception as e:
         st.toast(f"Error: {e}", icon="❌")
@@ -265,11 +263,11 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.41 (Beta)**")
+    st.caption("🚀 **Versi 2.43 (Beta)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
-# HALAMAN 1: CEK RESI
+# HALAMAN 1: CEK RESI (LANDING PAGE)
 # ==========================================
 if menu == "🔍 Cek Resi (Public)":
     st.title("🔍 Lacak Pengiriman")
@@ -310,14 +308,14 @@ if menu == "🔍 Cek Resi (Public)":
                         {install_info}
                         * 🕒 **Update:** {tgl[:16].replace('T',' ')}
                         """)
-                        msg = f"Halo Kak {d['customer_name']}, pesanan {d['product_name']} statusnya: *{d['status']}*."
-                        st.code(msg, language=None)
+                        
+                        # --- UPDATE 2.43: Template Pesan DIHAPUS ---
                         st.divider()
-                else: st.warning("Data tidak ditemukan.")
+                else: st.warning("Data tidak ditemukan. Mohon cek kembali Order ID Anda.")
             except: st.error("Terjadi kesalahan koneksi.")
 
 # ==========================================
-# HALAMAN 2: LOGIN
+# HALAMAN 2: LOGIN (PROTECTED WITH GATEKEEPER)
 # ==========================================
 elif menu == "🔐 Login Staff":
     st.title("🔐 Login Staff & Admin")
@@ -473,9 +471,8 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
             oid = curr['order_id']
             with st.expander("Tracking PT. BES"):
                 st.link_button("Buka Web BES", "https://www.bes-paket.com/track-package")
-                components.iframe("https://www.bes-paket.com/track-package", height=400)
+                components.iframe("https://www.bes-paket.com/track-package", height=500, scrolling=True)
             
-            # Form Update dengan Dynamic Key agar bisa direfresh
             with st.form("upd_form"):
                 c1, c2 = st.columns(2)
                 sts = ["Menunggu Konfirmasi", "Diproses Gudang", "Menunggu Kurir", "Dalam Pengiriman", "Selesai/Diterima"]
@@ -496,7 +493,6 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
                 st.text_input("Nama Customer", value=curr['customer_name'], key=f"cnama_{oid}")
                 st.text_input("Nama Barang", value=curr['product_name'], key=f"cbar_{oid}")
 
-                # CALLBACK PADA TOMBOL
                 st.form_submit_button("Simpan", on_click=process_admin_update, args=(oid,))
 
 # ==========================================
