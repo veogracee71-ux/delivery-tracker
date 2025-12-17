@@ -1,9 +1,8 @@
-# Versi 2.72 (Targeted Fixes)
+# Versi 2.73 (Role Optimization)
 # Status: Production Ready
 # Update: 
-# 1. Fix UI Blank pada menu Validasi jika data kosong.
-# 2. Fix Iframe Tracking BES agar bisa di-scroll.
-# 3. Penambahan separator (Pemisah) pada form Input Delivery Order.
+# 1. Menghilangkan menu "Input Delivery Order" untuk role SPV dan Admin Pusat (Hanya Sales).
+# 2. Mempertahankan fitur v2.72: Fix UI Blank Validasi, Scroll Iframe BES, dan Separator Form.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -264,17 +263,20 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR LOGIC ---
+# --- SIDEBAR LOGIC (ROLE OPTIMIZATION) ---
 if 'user_role' not in st.session_state: st.session_state['user_role'] = "Guest" 
 if 'user_branch' not in st.session_state: st.session_state['user_branch'] = ""
 
 if st.session_state['user_role'] == "Guest":
     menu_options = ["🔍 Cek Resi (Public)", "🔐 Login Staff"] 
 elif st.session_state['user_role'] == "Sales":
+    # Sales bisa Input dan Monitoring
     menu_options = ["📊 Dashboard Monitoring", "📝 Input Delivery Order", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "SPV":
-    menu_options = ["📊 Dashboard Monitoring", "📝 Input Delivery Order", "⚙️ Update Status (SPV)", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
+    # SPV TIDAK BISA INPUT ORDER - Fokus Validasi & Manajemen
+    menu_options = ["📊 Dashboard Monitoring", "⚙️ Update Status (SPV)", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "Admin":
+    # ADMIN TIDAK BISA INPUT ORDER - Fokus Validasi & Manajemen
     menu_options = ["📊 Dashboard Monitoring", "⚙️ Update Status (Admin)", "🗄️ Manajemen Data", "🔍 Cek Resi (Public)"]
 
 menu = st.sidebar.radio("Menu Aplikasi", menu_options)
@@ -289,7 +291,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.72 (Targeted Fix)**")
+    st.caption("🚀 **Versi 2.73 (Role Optimized)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -424,11 +426,15 @@ elif menu == "📊 Dashboard Monitoring":
     except Exception as e: st.error(f"Terjadi kesalahan: {e}")
 
 # ==========================================
-# HALAMAN 4: INPUT ORDER (DENGAN PEMISAH)
+# HALAMAN 4: INPUT ORDER (HANYA SALES)
 # ==========================================
 elif menu == "📝 Input Delivery Order":
+    # Proteksi tambahan jika user mencoba akses manual
+    if st.session_state['user_role'] not in ["Sales"]:
+        st.error("⛔ Akses Ditolak. Menu ini hanya untuk staf Sales Cabang.")
+        st.stop()
+
     st.title("📝 Input Delivery Order")
-    branch = st.session_state['user_branch']
     if st.session_state.get('sales_success'):
         st.success(f"✅ Order {st.session_state.get('sales_last_id')} Berhasil!")
         b64 = st.session_state.get('sales_pdf_data')
@@ -444,8 +450,7 @@ elif menu == "📝 Input Delivery Order":
             c1, c2 = st.columns(2)
             c1.text_input("Nama Sales Penginput", key="in_sales")
             c2.text_input("No WhatsApp Sales", key="in_sales_hp")
-            
-            st.divider() # --- PEMISAH ---
+            st.divider()
 
             # --- PEMISAH 2: CUSTOMER ---
             st.subheader("2. Data Pelanggan")
@@ -453,29 +458,25 @@ elif menu == "📝 Input Delivery Order":
             c3.text_input("Nama Lengkap Customer", key="in_nama")
             c4.text_input("No HP Customer", key="in_hp")
             st.text_area("Alamat Pengiriman Lengkap", key="in_alamat")
-            
-            st.divider() # --- PEMISAH ---
+            st.divider()
 
             # --- PEMISAH 3: BARANG ---
             st.subheader("3. Detail Barang & Layanan")
             c5, c6 = st.columns(2)
             c5.text_input("Nama Barang / Produk", key="in_barang")
             sel_tipe = st.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"], key="in_tipe")
-            
             if sel_tipe == "Tukar Tambah": 
                 st.info("🔄 Mode Tukar Tambah Aktif")
                 st.text_input("Detail Barang Lama (Wajib)", key="in_barang_lama", placeholder="Merk, Tipe, Kondisi...")
-            
             sel_inst = st.selectbox("Opsi Instalasi?", ["Tidak", "Ya - Vendor"], key="in_instalasi")
             if sel_inst == "Ya - Vendor": 
                 st.info("🔧 Mode Instalasi Vendor Aktif")
                 st.text_input("Biaya Transport / Instalasi (Rp)", key="in_biaya_inst")
-            
             st.divider()
             st.button("Kirim ke Gudang", type="primary", on_click=process_sales_submit)
 
 # ==========================================
-# HALAMAN 5: UPDATE STATUS (FIX BLANK & SCROLL)
+# HALAMAN 5: UPDATE STATUS
 # ==========================================
 elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SPV)":
     st.title("⚙️ Validasi Order")
@@ -488,7 +489,6 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
         sel = st.selectbox("Pilih Order:", list(opts.keys()), index=None, key="upd_sel")
         if sel:
             curr = opts[sel]; oid = curr['order_id']
-            # FIX SCROLL: Menambahkan parameter scrolling=True
             with st.expander("🌍 Tracking Website PT. BES"): 
                 st.caption("Gunakan area di bawah ini untuk melacak resi PT. BES secara langsung.")
                 components.iframe("https://www.bes-paket.com/track-package", height=500, scrolling=True)
@@ -500,12 +500,11 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
                 st.text_input("No Resi / Plat Nomor", value=curr['resi'] or "", key=f"res_{oid}")
                 st.divider(); st.date_input("Tanggal Fakta Lapangan", value=date.today(), key=f"date_{oid}"); st.time_input("Jam Fakta Lapangan", value=datetime.now().time(), key=f"time_{oid}")
                 st.divider()
-                st.caption("Koreksi Data:")
+                st.caption("Koreksi Data (Jika Ada Salah Input):")
                 st.text_input("Nama Customer", value=curr['customer_name'], key=f"cnama_{oid}")
                 st.text_input("Nama Barang", value=curr['product_name'], key=f"cbar_{oid}")
                 st.form_submit_button("Simpan Perubahan", on_click=process_admin_update, args=(oid,))
     else:
-        # FIX BLANK: Menampilkan pesan jika data divalidasi kosong
         st.info("📍 Belum ada order baru yang masuk untuk divalidasi di cabang ini.")
 
 # ==========================================
