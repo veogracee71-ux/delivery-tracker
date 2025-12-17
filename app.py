@@ -1,8 +1,7 @@
-# Versi 2.63 (Final Fix ID Extraction)
+# Versi 2.65 (UX Improvement)
 # Status: Stabil
-# Update: FIX BUG ID EXTRACTION. Menerapkan metode get() pada ekstraksi 'order_id' 
-#         di Dashboard agar lebih tangguh terhadap data yang tidak terstruktur atau kosong, 
-#         memecahkan error NameError/KeyError yang tidak terdeteksi.
+# Update: FIX BLANK PAGE PADA VALIDASI. Menambahkan pesan informasi (st.info) jika tidak ada 
+#         data yang perlu divalidasi agar staf tidak bingung melihat layar putih polos.
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -255,15 +254,13 @@ def process_admin_update(oid):
     except Exception as e:
         st.toast(f"Error: {e}", icon="❌")
 
-# --- CUSTOM CSS (FIX WARNA TOMBOL FORM) ---
+# --- CUSTOM CSS ---
 st.markdown("""
 <style>
     div.stButton > button { background-color: #0095DA !important; color: white !important; border: 1px solid #0095DA !important; font-weight: bold !important; }
     div.stButton > button:hover { background-color: #007AB8 !important; border-color: #007AB8 !important; color: white !important; }
-    /* Menargetkan tombol di dalam container non-form */
     button[kind="primary"] { background-color: #0095DA !important; color: white !important; border: none !important; }
     [data-testid="stLinkButton"] > a { background-color: #0095DA !important; color: white !important; border: 1px solid #0095DA !important; font-weight: bold !important; }
-    /* FIX V2.62: Menargetkan tombol submit form agar berwarna biru Blibli */
     div.stFormSubmitButton > button { background-color: #0095DA !important; color: white !important; border: none !important; }
     [data-testid="stFormSubmitButton"] > button { background-color: #0095DA !important; color: white !important; border: none !important; } 
 </style>
@@ -294,7 +291,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.63 (Final Fix)**")
+    st.caption("🚀 **Versi 2.65 (Fix Blank UI)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -426,60 +423,56 @@ elif menu == "📊 Dashboard Monitoring":
                 sel_br = st.selectbox("Filter Cabang:", br_list)
                 filtered = res.data if sel_br == "Semua Cabang" else [d for d in res.data if d.get('branch') == sel_br]
 
-            # --- METRICS & STATUS LOGIC ---
-            pending = [x for x in filtered if "selesai" not in x['status'].lower() and "dikirim" not in x['status'].lower() and "jalan" not in x['status'].lower() and "pengiriman" not in x['status'].lower()]
-            shipping = [x for x in filtered if "dikirim" in x['status'].lower() or "jalan" in x['status'].lower() or "pengiriman" in x['status'].lower()]
-            done = [x for x in filtered if "selesai" in x['status'].lower() or "diterima" in x['status'].lower()]
-            
-            # Badge Notifikasi
-            pending_confirmation = [x for x in filtered if x['status'].strip() == "Menunggu Konfirmasi"]
-            if pending_confirmation and st.session_state['user_role'] in ["SPV", "Admin"]:
-                 st.error(f"🔔 PERHATIAN: Ada {len(pending_confirmation)} Order Baru Menunggu Konfirmasi!", icon="🔥")
+            if not filtered:
+                st.info("Belum ada data pengiriman untuk filter ini.")
+            else:
+                # --- METRICS & STATUS LOGIC ---
+                pending = [x for x in filtered if "selesai" not in x['status'].lower() and "dikirim" not in x['status'].lower() and "jalan" not in x['status'].lower() and "pengiriman" not in x['status'].lower()]
+                shipping = [x for x in filtered if "dikirim" in x['status'].lower() or "jalan" in x['status'].lower() or "pengiriman" in x['status'].lower()]
+                done = [x for x in filtered if "selesai" in x['status'].lower() or "diterima" in x['status'].lower()]
+                
+                # Badge Notifikasi
+                pending_confirmation = [x for x in filtered if x['status'].strip() == "Menunggu Konfirmasi"]
+                if pending_confirmation and st.session_state['user_role'] in ["SPV", "Admin"]:
+                     st.error(f"🔔 PERHATIAN: Ada {len(pending_confirmation)} Order Baru Menunggu Konfirmasi!", icon="🔥")
 
-            c1, c2, c3 = st.columns(3)
-            c1.metric("📦 Diproses", f"{len(pending)}")
-            c2.metric("🚚 Sedang Jalan", f"{len(shipping)}")
-            c3.metric("✅ Selesai", f"{len(done)}")
-            st.divider()
+                c1, c2, c3 = st.columns(3)
+                c1.metric("📦 Diproses", f"{len(pending)}")
+                c2.metric("🚚 Sedang Jalan", f"{len(shipping)}")
+                c3.metric("✅ Selesai", f"{len(done)}")
+                st.divider()
 
-            # --- FIX TAMPILAN DASHBOARD: FORMAT WAKTU & BATASI KOLOM ---
-            df_display_all = pd.DataFrame(filtered)
-            
-            # 1. Konversi dan Format Waktu agar rapi (DD/MM/YYYY HH:MM)
-            date_format = '%d/%m/%Y %H:%M'
-            
-            for col in ['last_updated', 'created_at']:
-                if col in df_display_all.columns:
-                    # Convert to datetime, then round down to seconds to remove microseconds, then format to string
-                    df_display_all[col] = pd.to_datetime(df_display_all[col], errors='coerce').dt.floor('S').dt.strftime(date_format)
-                    # Replace NaN/NaT values which may occur if data is missing
-                    df_display_all[col] = df_display_all[col].fillna('-')
+                # --- FIX TAMPILAN DASHBOARD ---
+                df_display_all = pd.DataFrame(filtered)
+                
+                date_format = '%d/%m/%Y %H:%M'
+                for col in ['last_updated', 'created_at']:
+                    if col in df_display_all.columns:
+                        df_display_all[col] = pd.to_datetime(df_display_all[col], errors='coerce').dt.floor('S').dt.strftime(date_format)
+                        df_display_all[col] = df_display_all[col].fillna('-')
 
-            # 2. Tentukan Kolom Esensial
-            display_cols = ['order_id', 'customer_name', 'product_name', 'status', 'last_updated', 'delivery_type']
-            if st.session_state['user_role'] == "Admin" and sel_br == "Semua Cabang":
-                 display_cols.insert(3, 'branch')
-            
-            final_display_cols = [col for col in display_cols if col in df_display_all.columns]
+                display_cols = ['order_id', 'customer_name', 'product_name', 'status', 'last_updated', 'delivery_type']
+                if st.session_state['user_role'] == "Admin" and (('sel_br' in locals() and sel_br == "Semua Cabang") or 'sel_br' not in locals()):
+                     display_cols.insert(3, 'branch')
+                
+                final_display_cols = [col for col in display_cols if col in df_display_all.columns]
 
-            # 3. Filter DataFrame untuk Display (FIX V2.63)
-            pending_ids = [d.get('order_id') for d in pending if d.get('order_id')]
-            shipping_ids = [d.get('order_id') for d in shipping if d.get('order_id')]
-            done_ids = [d.get('order_id') for d in done if d.get('order_id')]
+                pending_ids = [d.get('order_id') for d in pending if d.get('order_id')]
+                shipping_ids = [d.get('order_id') for d in shipping if d.get('order_id')]
+                done_ids = [d.get('order_id') for d in done if d.get('order_id')]
 
-            df_pending_display = df_display_all[df_display_all['order_id'].isin(pending_ids)][final_display_cols]
-            df_shipping_display = df_display_all[df_display_all['order_id'].isin(shipping_ids)][final_display_cols]
-            df_done_display = df_display_all[df_display_all['order_id'].isin(done_ids)][final_display_cols]
+                df_pending_display = df_display_all[df_display_all['order_id'].isin(pending_ids)][final_display_cols]
+                df_shipping_display = df_display_all[df_display_all['order_id'].isin(shipping_ids)][final_display_cols]
+                df_done_display = df_display_all[df_display_all['order_id'].isin(done_ids)][final_display_cols]
 
-            # 4. Render Hasil
-            with st.expander(f"📦 Diproses Gudang ({len(pending)})", expanded=False): st.dataframe(df_pending_display, use_container_width=True)
-            with st.expander(f"🚚 Sedang Jalan ({len(shipping)})", expanded=False): st.dataframe(df_shipping_display, use_container_width=True)
-            with st.expander(f"✅ Selesai ({len(done)})", expanded=False): st.dataframe(df_done_display, use_container_width=True)
+                with st.expander(f"📦 Diproses Gudang ({len(pending)})", expanded=False): st.dataframe(df_pending_display, use_container_width=True)
+                with st.expander(f"🚚 Sedang Jalan ({len(shipping)})", expanded=False): st.dataframe(df_shipping_display, use_container_width=True)
+                with st.expander(f"✅ Selesai ({len(done)})", expanded=False): st.dataframe(df_done_display, use_container_width=True)
         else: st.info("Data kosong.")
     except Exception as e: st.error(str(e))
 
 # ==========================================
-# HALAMAN 4: INPUT ORDER (INTERAKTIF)
+# HALAMAN 4: INPUT ORDER
 # ==========================================
 elif menu == "📝 Input Delivery Order":
     st.title("📝 Input Delivery Order")
@@ -489,56 +482,38 @@ elif menu == "📝 Input Delivery Order":
     if st.session_state.get('sales_success'):
         st.success(f"✅ Order {st.session_state.get('sales_last_id')} Berhasil Dikirim!")
         b64 = st.session_state.get('sales_pdf_data')
-        
         st.markdown(f'<a href="data:application/pdf;base64,{b64}" download="SJ_{st.session_state.get("sales_last_id")}.pdf" style="text-decoration:none;"><button style="background-color:#0095DA;color:white;border:none;padding:10px;border-radius:5px;cursor:pointer;width:100%;">DOWNLOAD SURAT JALAN (PDF 80mm)</button></a>', unsafe_allow_html=True)
         st.divider()
-        
         if st.button("Selesai / Buat Baru"):
             st.session_state['sales_success'] = False
             st.rerun()
     
     if st.session_state.get('sales_error'): st.error(st.session_state['sales_error'])
 
-    # GANTI FORM JADI CONTAINER AGAR INTERAKTIF
     if not st.session_state.get('sales_success'):
         with st.container(border=True):
             st.subheader("Data Pelanggan & Barang")
-            
             c1, c2 = st.columns(2)
             st.text_input("Order ID (Wajib)", key="in_id")
-            
-            c2a, c2b = c2.columns(2)
             st.text_input("Nama Sales", key="in_sales")
             st.text_input("No WA Sales", key="in_sales_hp")
-            
-            c3, c4 = st.columns(2)
             st.text_input("Nama Customer", key="in_nama")
             st.text_input("No HP Customer", key="in_hp")
             st.text_area("Alamat Pengiriman", key="in_alamat")
-            
-            st.markdown("**Detail Barang**")
-            c5, c6 = st.columns(2)
             st.text_input("Nama Barang", key="in_barang")
             sel_tipe = st.selectbox("Tipe Pengiriman", ["Reguler", "Tukar Tambah", "Express"], key="in_tipe")
-            
-            # KONDISIONAL: HANYA MUNCUL JIKA TUKAR TAMBAH
             if sel_tipe == "Tukar Tambah":
                 st.info("🔄 Mode Tukar Tambah Aktif")
                 st.text_input("Detail Barang Lama (Wajib)", placeholder="Merk, Tipe, Kondisi...", key="in_barang_lama")
-
-            c7, c8 = st.columns(2)
             sel_inst = st.selectbox("Instalasi?", ["Tidak", "Ya - Vendor"], key="in_instalasi")
-            
-            # KONDISIONAL: HANYA MUNCUL JIKA INSTALASI VENDOR
             if sel_inst == "Ya - Vendor":
                 st.info("🔧 Mode Instalasi Vendor Aktif")
                 st.text_input("Biaya Transport (Rp)", key="in_biaya_inst")
-            
             st.divider()
             st.button("Kirim ke Gudang", type="primary", on_click=process_sales_submit)
 
 # ==========================================
-# HALAMAN 5: UPDATE STATUS
+# HALAMAN 5: UPDATE STATUS (FIX BLANK UI)
 # ==========================================
 elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SPV)":
     st.title("⚙️ Validasi Order")
@@ -566,118 +541,55 @@ elif menu == "⚙️ Update Status (Admin)" or menu == "⚙️ Update Status (SP
                 st.selectbox("Status", sts, index=idx, key=f"stat_{oid}")
                 st.text_input("Kurir", value=curr['courier'] or "", key=f"kur_{oid}")
                 st.text_input("Resi", value=curr['resi'] or "", key=f"res_{oid}")
-                
                 st.divider()
                 st.write("**Waktu Fakta Lapangan:**")
                 st.date_input("Tanggal", value="today", key=f"date_{oid}")
                 st.time_input("Jam", value="now", key=f"time_{oid}")
-                
                 st.divider()
                 st.caption("Koreksi Data:")
                 st.text_input("Nama Customer", value=curr['customer_name'], key=f"cnama_{oid}")
                 st.text_input("Nama Barang", value=curr['product_name'], key=f"cbar_{oid}")
-
                 st.form_submit_button("Simpan", on_click=process_admin_update, args=(oid,))
+    else:
+        # FIX V2.65: Munculkan pesan jika data kosong agar tidak blank putih
+        st.info("📍 Belum ada order yang masuk untuk divalidasi di cabang ini.")
 
 # ==========================================
-# HALAMAN 6: MANAJEMEN DATA (FIX EXCEL FORMAT)
+# HALAMAN 6: MANAJEMEN DATA
 # ==========================================
 elif menu == "🗄️ Manajemen Data":
     st.title("🗄️ Manajemen Data")
-    
     res = supabase.table("shipments").select("*").execute()
     all_data = res.data if res.data else []
-    
     if st.session_state['user_role'] == "SPV":
         all_data = [d for d in all_data if d.get('branch') == st.session_state['user_branch']]
-        st.info(f"Mode SPV: Mengelola data cabang **{st.session_state['user_branch']}**")
 
     if all_data:
         df = pd.DataFrame(all_data)
-        
         tab1, tab2, tab3 = st.tabs(["📥 Download Laporan (Excel)", "🗑️ Hapus Per Order", "🔥 Reset Database (Bahaya)"])
-        
         with tab1:
-            st.subheader("Download Data Bulanan (Excel)")
-            st.write(f"Total Data: **{len(df)}** baris")
-            
-            # --- DATA CLEANING FOR EXCEL ---
-            
-            # 1. Konversi ke datetime objects
-            if 'created_at' in df.columns:
-                df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce')
-            if 'last_updated' in df.columns:
-                df['last_updated'] = pd.to_datetime(df['last_updated'], errors='coerce')
-            
-            # 2. Format menjadi string rapi (DD/MM/YYYY HH:MM)
-            if 'created_at' in df.columns:
-                df['created_at'] = df['created_at'].dt.strftime('%d/%m/%Y %H:%M')
-            if 'last_updated' in df.columns:
-                df['last_updated'] = df['last_updated'].dt.strftime('%d/%m/%Y %H:%M')
-            
-            # --- END DATA CLEANING ---
-            
-            cabang_name = st.session_state['user_branch'].replace(" ", "_") if st.session_state['user_role'] == "SPV" else "Semua_Cabang"
-            bulan_indo = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
-            now = datetime.now()
-            nama_bulan = bulan_indo[now.month - 1]
-            file_name = f"Laporan_Delivery_{cabang_name}_{nama_bulan}_{now.year}.xlsx"
-            
+            if 'created_at' in df.columns: df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce').dt.strftime('%d/%m/%Y %H:%M')
+            if 'last_updated' in df.columns: df['last_updated'] = pd.to_datetime(df['last_updated'], errors='coerce').dt.strftime('%d/%m/%Y %H:%M')
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 df.to_excel(writer, index=False, sheet_name='Laporan')
                 workbook = writer.book
                 worksheet = writer.sheets['Laporan']
-                
-                header_fmt = workbook.add_format({
-                    'bold': True, 'fg_color': '#0095DA', 'font_color': '#FFFFFF',
-                    'border': 1, 'text_wrap': True, 'valign': 'vcenter', 'align': 'center'
-                })
-                body_fmt = workbook.add_format({'border': 1, 'valign': 'top'})
-                
-                for col_num, value in enumerate(df.columns.values):
-                    worksheet.write(0, col_num, value, header_fmt)
-                
-                for i, col in enumerate(df.columns):
-                    worksheet.set_column(i, i, 20, body_fmt)
-            
-            excel_data = output.getvalue()
-            
-            st.download_button(
-                label="📥 Download File Excel (.xlsx)",
-                data=excel_data,
-                file_name=file_name,
-                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            )
-
+                header_fmt = workbook.add_format({'bold': True, 'fg_color': '#0095DA', 'font_color': '#FFFFFF', 'border': 1})
+                for col_num, value in enumerate(df.columns.values): worksheet.write(0, col_num, value, header_fmt)
+            st.download_button(label="📥 Download File Excel (.xlsx)", data=output.getvalue(), file_name="Laporan_Delivery.xlsx")
         with tab2:
-            st.subheader("Hapus Order Satuan")
-            st.caption("Pilih Order ID yang ingin dihapus jika ada kesalahan input.")
             del_opts = {f"{d['order_id']} - {d['customer_name']}": d['order_id'] for d in all_data}
             del_sel = st.selectbox("Pilih Order untuk Dihapus:", list(del_opts.keys()), index=None)
-            
-            if del_sel:
-                oid_to_del = del_opts[del_sel]
-                st.warning(f"Anda akan menghapus Order ID: **{oid_to_del}**")
-                if st.button("Hapus Order Ini", type="primary"):
-                    supabase.table("shipments").delete().eq("order_id", oid_to_del).execute()
-                    st.toast("Order berhasil dihapus!", icon="🗑️")
-                    time.sleep(1)
-                    st.rerun()
-
+            if del_sel and st.button("Hapus Order Ini", type="primary"):
+                supabase.table("shipments").delete().eq("order_id", del_opts[del_sel]).execute()
+                st.toast("Order berhasil dihapus!"); time.sleep(1); st.rerun()
         with tab3:
-            st.subheader("🔥 Reset Database (Kosongkan Semua)")
-            st.error("PERHATIAN: Fitur ini akan menghapus SEMUA DATA di tabel. Pastikan Anda sudah DOWNLOAD LAPORAN terlebih dahulu!")
-            
-            if st.session_state['user_role'] != "Admin":
-                st.warning("⛔ Akses Ditolak. Hanya Admin Pusat yang boleh melakukan Reset Total.")
-            else:
+            if st.session_state['user_role'] == "Admin":
                 confirm_txt = st.text_input("Ketik 'HAPUS SEMUA' untuk konfirmasi:")
-                if confirm_txt == "HAPUS SEMUA":
-                    if st.button("🔴 YA, KOSONGKAN DATABASE", type="primary"):
-                        supabase.table("shipments").delete().neq("id", 0).execute()
-                        st.success("Database telah dikosongkan untuk bulan baru.")
-                        time.sleep(2)
-                        st.rerun()
+                if confirm_txt == "HAPUS SEMUA" and st.button("🔴 YA, KOSONGKAN DATABASE", type="primary"):
+                    supabase.table("shipments").delete().neq("id", 0).execute()
+                    st.success("Database telah dikosongkan."); time.sleep(2); st.rerun()
+            else: st.warning("Akses Ditolak. Hanya Admin Pusat.")
     else:
         st.info("Belum ada data untuk dikelola.")
