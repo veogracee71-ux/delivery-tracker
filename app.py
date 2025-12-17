@@ -1,14 +1,13 @@
-# Versi 2.36
-# Update:
-# 1. Menjadikan "Cek Resi" sebagai Halaman Utama (Landing Page) agar Customer tidak melihat Login Staff di awal.
-# 2. Update Link Aplikasi Asli untuk QR Code.
+# Versi 2.37
+# Update: Menambahkan "Security Gate" (Kode Akses Awal) di halaman Login Staff untuk proteksi ganda.
+# Kode Akses Default: "blibli"
 
 import streamlit as st
 import streamlit.components.v1 as components 
 from supabase import create_client, Client
 from urllib.parse import quote
 import time
-from datetime import datetime
+from datetime import datetime, date 
 from fpdf import FPDF
 import base64
 import qrcode
@@ -20,10 +19,10 @@ st.set_page_config(
     page_title="Delivery Tracker", 
     page_icon="📦", 
     layout="wide", 
-    initial_sidebar_state="collapsed" # Sidebar tertutup agar Login tidak langsung terlihat
+    initial_sidebar_state="collapsed" 
 )
 
-# --- LINK APLIKASI (SUDAH DIUPDATE) ---
+# --- LINK APLIKASI ---
 APP_BASE_URL = "https://delivery-tracker.streamlit.app" 
 
 # --- LOAD SECRETS ---
@@ -33,9 +32,14 @@ try:
     ADMIN_PASSWORD = st.secrets["passwords"]["admin"]
     SALES_CREDENTIALS = st.secrets["passwords"]["sales"]
     SPV_CREDENTIALS = st.secrets["passwords"]["spv"]
+    # Coba ambil kode gatekeeper dari secrets, kalo gak ada pake default "blibli"
+    GATEKEEPER_PASSWORD = st.secrets["passwords"].get("gatekeeper", "blibli")
 except:
-    st.error("Secrets belum lengkap.")
-    st.stop()
+    # Fallback jika secrets belum diupdate
+    GATEKEEPER_PASSWORD = "blibli"
+    if not 'supabase' in locals(): # Cek jika supabase gagal load
+        st.error("Secrets belum lengkap.")
+        st.stop()
 
 supabase: Client = create_client(url, key)
 
@@ -218,9 +222,8 @@ st.markdown("""
 if 'user_role' not in st.session_state: st.session_state['user_role'] = "Guest" 
 if 'user_branch' not in st.session_state: st.session_state['user_branch'] = ""
 
-# LOGIKA MENU BARU: Cek Resi (Public) jadi yang PERTAMA (Landing Page)
 if st.session_state['user_role'] == "Guest":
-    menu_options = ["🔍 Cek Resi (Public)", "🔐 Login Staff"] # DIBALIK
+    menu_options = ["🔍 Cek Resi (Public)", "🔐 Login Staff"] 
 elif st.session_state['user_role'] == "Sales":
     menu_options = ["📝 Input Delivery Order", "📊 Dashboard Monitoring", "🔍 Cek Resi (Public)"]
 elif st.session_state['user_role'] == "SPV":
@@ -240,7 +243,7 @@ with st.sidebar:
             st.rerun()
     st.markdown("---")
     st.caption("© 2025 **Delivery Tracker System**")
-    st.caption("🚀 **Versi 2.36 (Beta)**")
+    st.caption("🚀 **Versi 2.37 (Beta)**")
     st.caption("_Internal Use Only | Developed by Agung Sudrajat_")
 
 # ==========================================
@@ -250,7 +253,6 @@ if menu == "🔍 Cek Resi (Public)":
     st.title("🔍 Lacak Pengiriman")
     st.markdown("Masukkan Nomor Order ID atau Nama Anda untuk melacak status barang.")
     
-    # Auto-fill dari QR Code
     default_oid = ""
     try:
         qp = st.query_params
@@ -293,11 +295,32 @@ if menu == "🔍 Cek Resi (Public)":
             except: st.error("Terjadi kesalahan koneksi.")
 
 # ==========================================
-# HALAMAN 2: LOGIN (STAFF ONLY)
+# HALAMAN 2: LOGIN (PROTECTED WITH GATEKEEPER)
 # ==========================================
 elif menu == "🔐 Login Staff":
     st.title("🔐 Login Staff & Admin")
-    st.info("Area ini khusus untuk Sales, SPV, dan Admin Pusat.")
+    
+    # --- LOGIKA GATEKEEPER ---
+    if "gate_unlocked" not in st.session_state:
+        st.session_state["gate_unlocked"] = False
+
+    if not st.session_state["gate_unlocked"]:
+        st.info("🔒 Area Terbatas. Masukkan Kode Akses Internal untuk melanjutkan.")
+        c_pin1, c_pin2, c_pin3 = st.columns([1,2,1])
+        with c_pin2:
+            gate_pin = st.text_input("Kode Akses:", type="password", key="gate_pin")
+            if st.button("Buka Akses"):
+                if gate_pin == GATEKEEPER_PASSWORD:
+                    st.session_state["gate_unlocked"] = True
+                    st.toast("Akses Diterima.", icon="🔓")
+                    time.sleep(0.5)
+                    st.rerun()
+                else:
+                    st.error("Kode Akses Salah.")
+        st.stop() # Berhenti disini jika belum unlocked
+    
+    # --- FORM LOGIN ASLI (Hanya muncul jika Gate unlocked) ---
+    st.success("Akses Terbuka. Silakan Login.")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
